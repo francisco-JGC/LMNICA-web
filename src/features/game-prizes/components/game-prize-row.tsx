@@ -9,11 +9,15 @@ import type { EffectiveGamePrize } from '@/features/game-prizes/types';
 type RowStatus = 'idle' | 'saving' | 'saved';
 
 /**
- * Editable pair of multipliers (exact + easy) for one game at one sucursal.
- * Inputs come pre-filled with the current effective value (override or
- * default) so operators tweak that number directly. If the resulting value
- * equals the game default, we send `null` to the server which drops the
- * override row and returns to inheriting the default.
+ * Editable multipliers (exact + easy + pair-easy) for one game at one
+ * sucursal. Inputs come pre-filled with the current effective value
+ * (override or default). If the resulting value equals the game default,
+ * we send `null` to the server which drops the override row and returns
+ * to inheriting the default.
+ *
+ * The "Par" field only shows for games with a pair-easy default configured
+ * — currently just Juega 3. Games without an easy default (Diaria, Fechas,
+ * Tica) skip both the easy and pair-easy fields.
  *
  * Save-on-blur, Enter to commit, Escape to snap back.
  */
@@ -28,9 +32,12 @@ export function GamePrizeRow({
     prize.exactMultiplier !== null ? String(prize.exactMultiplier) : '';
   const initialEasy =
     prize.easyMultiplier !== null ? String(prize.easyMultiplier) : '';
+  const initialPair =
+    prize.pairEasyMultiplier !== null ? String(prize.pairEasyMultiplier) : '';
 
   const [exactDraft, setExactDraft] = useState<string>(initialExact);
   const [easyDraft, setEasyDraft] = useState<string>(initialEasy);
+  const [pairDraft, setPairDraft] = useState<string>(initialPair);
   const [status, setStatus] = useState<RowStatus>('idle');
   const savedTimer = useRef<number | null>(null);
 
@@ -40,11 +47,12 @@ export function GamePrizeRow({
     if (status === 'idle') {
       setExactDraft(initialExact);
       setEasyDraft(initialEasy);
+      setPairDraft(initialPair);
     }
     // We intentionally depend on the derived strings so a background refetch
     // that lands on the same values doesn't trigger a rerender.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialExact, initialEasy, status]);
+  }, [initialExact, initialEasy, initialPair, status]);
 
   useEffect(() => {
     if (status !== 'saved') return;
@@ -82,6 +90,7 @@ export function GamePrizeRow({
   const persist = async () => {
     const nextExact = toPayload(exactDraft, prize.exactDefault);
     const nextEasy = toPayload(easyDraft, prize.easyDefault);
+    const nextPair = toPayload(pairDraft, prize.pairEasyDefault);
 
     if (nextExact === 'invalid') {
       setExactDraft(initialExact);
@@ -91,11 +100,16 @@ export function GamePrizeRow({
       setEasyDraft(initialEasy);
       return;
     }
+    if (nextPair === 'invalid') {
+      setPairDraft(initialPair);
+      return;
+    }
 
-    // No-op: neither override changed.
+    // No-op: no override changed.
     if (
       nextExact === prize.overrideExact &&
-      nextEasy === prize.overrideEasy
+      nextEasy === prize.overrideEasy &&
+      nextPair === prize.overridePairEasy
     ) {
       return;
     }
@@ -107,6 +121,7 @@ export function GamePrizeRow({
         gameId: prize.gameId,
         exactMultiplier: nextExact,
         easyMultiplier: nextEasy,
+        pairEasyMultiplier: nextPair,
       });
       setStatus('saved');
     } catch {
@@ -116,7 +131,8 @@ export function GamePrizeRow({
 
   const exactDirty = exactDraft.trim() !== initialExact;
   const easyDirty = easyDraft.trim() !== initialEasy;
-  const anyDirty = exactDirty || easyDirty;
+  const pairDirty = pairDraft.trim() !== initialPair;
+  const anyDirty = exactDirty || easyDirty || pairDirty;
 
   const resetToDefaults = () => {
     setExactDraft(
@@ -124,6 +140,9 @@ export function GamePrizeRow({
     );
     setEasyDraft(
       prize.easyDefault !== null ? String(prize.easyDefault) : '',
+    );
+    setPairDraft(
+      prize.pairEasyDefault !== null ? String(prize.pairEasyDefault) : '',
     );
     // Let the blur cascade handle the persist so we keep a single write path.
     // Trigger it manually since state updates are batched.
@@ -133,6 +152,10 @@ export function GamePrizeRow({
   // Games without an easy default (Diaria, Fechas, Tica, etc.) don't show
   // the second input — one less field for the operator to look past.
   const showEasy = prize.easyDefault !== null;
+  // "Premio par" es una regla específica de Juega 3, no de todo THREE_DIGIT.
+  // Gana 3 y Tresmonazo comparten tipo pero el negocio no las incluye. Si en
+  // el futuro cambia, se ajusta acá + en game.entity.ts + en el upsert use case.
+  const showPair = prize.gameSlug === 'juega3';
 
   const statusBadge =
     status !== 'idle'
@@ -141,13 +164,19 @@ export function GamePrizeRow({
         : <Check className="size-4 text-emerald-600" strokeWidth={2.8} />
       : null;
 
+  const columnCount = 1 + 1 + (showEasy ? 1 : 0) + (showPair ? 1 : 0);
+  const gridTemplate =
+    columnCount === 4
+      ? 'grid-cols-[1fr_auto_auto_auto]'
+      : columnCount === 3
+        ? 'grid-cols-[1fr_auto_auto]'
+        : 'grid-cols-[1fr_auto]';
+
   return (
     <li
       className={cn(
         'grid items-center gap-3 px-4 py-2.5 hover:bg-slate-50/40',
-        showEasy
-          ? 'grid-cols-[1fr_auto_auto]'
-          : 'grid-cols-[1fr_auto]',
+        gridTemplate,
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -162,6 +191,8 @@ export function GamePrizeRow({
             <span>
               Default: {prize.exactDefault ?? '—'}x
               {prize.easyDefault !== null && ` / ${prize.easyDefault}x`}
+              {prize.pairEasyDefault !== null &&
+                ` / ${prize.pairEasyDefault}x par`}
             </span>
             {prize.hasOverride && (
               <button
@@ -186,7 +217,7 @@ export function GamePrizeRow({
         dirty={exactDirty}
         overridden={prize.overrideExact !== null}
         onBlur={persist}
-        rightBadge={!showEasy ? statusBadge : undefined}
+        rightBadge={!showEasy && !showPair ? statusBadge : undefined}
       />
       {showEasy && (
         <PrizeField
@@ -197,6 +228,22 @@ export function GamePrizeRow({
           dirty={easyDirty}
           overridden={prize.overrideEasy !== null}
           onBlur={persist}
+          rightBadge={!showPair ? statusBadge : undefined}
+        />
+      )}
+      {showPair && (
+        <PrizeField
+          label="Par"
+          draft={pairDraft}
+          setDraft={setPairDraft}
+          placeholder={
+            prize.pairEasyDefault !== null
+              ? String(prize.pairEasyDefault)
+              : 'sin regla'
+          }
+          dirty={pairDirty}
+          overridden={prize.overridePairEasy !== null}
+          onBlur={persist}
           rightBadge={statusBadge}
         />
       )}
@@ -205,7 +252,11 @@ export function GamePrizeRow({
         <span
           className={cn(
             '-mt-1.5 pl-11 text-[10px] text-amber-700',
-            showEasy ? 'col-span-3' : 'col-span-2',
+            columnCount === 4
+              ? 'col-span-4'
+              : columnCount === 3
+                ? 'col-span-3'
+                : 'col-span-2',
           )}
         >
           Sin guardar

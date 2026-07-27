@@ -221,7 +221,14 @@ function GameRow({
         role="button"
       >
         {game.easyMultiplier !== null ? (
-          <>×{game.easyMultiplier}</>
+          <>
+            ×{game.easyMultiplier}
+            {game.pairEasyMultiplier !== null && (
+              <span className="ml-1 text-[11px] text-indigo-700">
+                (par ×{game.pairEasyMultiplier})
+              </span>
+            )}
+          </>
         ) : (
           <Empty />
         )}

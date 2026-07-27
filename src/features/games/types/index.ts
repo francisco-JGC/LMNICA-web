@@ -12,6 +12,12 @@ export interface Game {
   type: GameType;
   exactMultiplier: number | null;
   easyMultiplier: number | null;
+  /**
+   * Only meaningful on THREE_DIGIT games. Null = pair rule disabled — a
+   * fácil win pays the standard easyMultiplier regardless of the winning
+   * number's digits.
+   */
+  pairEasyMultiplier: number | null;
   imagePath: string | null;
   orderIndex: number;
   isActive: boolean;
