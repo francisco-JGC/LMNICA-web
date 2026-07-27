@@ -14,7 +14,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 import { useSession } from '@/features/auth/hooks/use-session';
-import { useUpdateSalePoint } from '@/features/sale-points/hooks/use-sale-points';
+import {
+  useSetAssignedPartners,
+  useUpdateSalePoint,
+} from '@/features/sale-points/hooks/use-sale-points';
 import { useUpdateUser, useUsers } from '@/features/users/hooks/use-users';
 import { sucursalConfigPath } from '@/shared/constants/routes';
 import { cn } from '@/shared/lib/cn';
@@ -53,10 +56,13 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const [pickerValue, setPickerValue] = useState('');
+  const [partnerPickerValue, setPartnerPickerValue] = useState('');
 
   const { mutateAsync: mutateSalePoint, isPending: savingInfo, error: infoError, reset: resetInfo } =
     useUpdateSalePoint();
   const { mutateAsync: mutateUser, isPending: mutatingUser } = useUpdateUser();
+  const { mutateAsync: mutateAssignedPartners, isPending: mutatingAssigned } =
+    useSetAssignedPartners();
 
   const { data: sellersPage, isLoading: loadingSellers } = useUsers({
     role: UserRole.SELLER,
@@ -74,6 +80,7 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
       setForm(stateFromSalePoint(salePoint));
       setEditing(false);
       setPickerValue('');
+      setPartnerPickerValue('');
       resetInfo();
     }
   }, [open, salePoint, resetInfo]);
@@ -87,6 +94,21 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
     () => sellers.filter((s) => s.salePointId === null),
     [sellers],
   );
+
+  const partnersAll = partnersPage?.items ?? [];
+  const assignedPartnerIds = salePoint?.assignedPartnerIds ?? [];
+  const assignedPartners = useMemo(() => {
+    const idSet = new Set(assignedPartnerIds);
+    return partnersAll.filter((p) => idSet.has(p.id));
+  }, [partnersAll, assignedPartnerIds]);
+  // Available = partners that are neither already assigned nor the current
+  // encargado (the encargado already has full visibility, so exposing them in
+  // the picker would only invite redundant assignments).
+  const availablePartners = useMemo(() => {
+    const excluded = new Set<string>(assignedPartnerIds);
+    if (salePoint?.ownerPartnerId) excluded.add(salePoint.ownerPartnerId);
+    return partnersAll.filter((p) => !excluded.has(p.id));
+  }, [partnersAll, assignedPartnerIds, salePoint?.ownerPartnerId]);
 
   if (!salePoint || !form) return null;
 
@@ -142,6 +164,25 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
     });
   };
 
+  const handleAddPartner = async () => {
+    if (!partnerPickerValue || mutatingAssigned) return;
+    const nextIds = [...assignedPartnerIds, partnerPickerValue];
+    await mutateAssignedPartners({
+      id: salePoint.id,
+      payload: { partnerIds: nextIds },
+    });
+    setPartnerPickerValue('');
+  };
+
+  const handleRemovePartner = async (partnerId: string) => {
+    if (mutatingAssigned) return;
+    const nextIds = assignedPartnerIds.filter((id) => id !== partnerId);
+    await mutateAssignedPartners({
+      id: salePoint.id,
+      payload: { partnerIds: nextIds },
+    });
+  };
+
   return (
     <Modal
       open={open}
@@ -190,26 +231,28 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
             >
               Cerrar
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                navigate(sucursalConfigPath(salePoint.id));
-              }}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary"
-            >
-              <Settings className="size-4" strokeWidth={2.4} />
-              Configuración
-            </button>
             {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-              >
-                <Pencil className="size-4" strokeWidth={2.4} />
-                Editar
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate(sucursalConfigPath(salePoint.id));
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary"
+                >
+                  <Settings className="size-4" strokeWidth={2.4} />
+                  Configuración
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+                >
+                  <Pencil className="size-4" strokeWidth={2.4} />
+                  Editar
+                </button>
+              </>
             )}
           </>
         )
@@ -337,6 +380,112 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
           </div>
         )}
       </div>
+
+      <div className="mt-6 border-t border-border pt-5">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Handshake className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-bold text-foreground">
+              Socios asignados
+            </h3>
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
+              {assignedPartners.length}
+            </span>
+          </div>
+        </div>
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          Otros socios que verán la información de esta sucursal (dashboards
+          y reportes). No la administran.
+        </p>
+
+        {assignedPartners.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border bg-slate-50/50 px-4 py-6 text-center text-sm text-muted-foreground">
+            Aún no hay socios asignados a esta sucursal.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border/60 rounded-lg border border-border bg-card">
+            {assignedPartners.map((partner) => (
+              <li
+                key={partner.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5"
+              >
+                <div className="min-w-0 flex items-center gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-xs font-black text-white">
+                    {partner.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">
+                      {partner.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      @{partner.username}
+                    </div>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePartner(partner.id)}
+                    disabled={mutatingAssigned}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-500/10',
+                      mutatingAssigned && 'cursor-not-allowed opacity-60',
+                    )}
+                  >
+                    <Trash2 className="size-3.5" strokeWidth={2.4} />
+                    Quitar
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isAdmin && (
+          <div className="mt-4 flex items-end gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                Añadir socio
+              </label>
+              <Select
+                value={partnerPickerValue}
+                onChange={setPartnerPickerValue}
+                leadingIcon={<Handshake className="size-4" />}
+                placeholder={
+                  availablePartners.length === 0
+                    ? 'No hay socios disponibles'
+                    : 'Selecciona un socio'
+                }
+                disabled={
+                  availablePartners.length === 0 || mutatingAssigned
+                }
+                options={availablePartners.map((p) => ({
+                  value: p.id,
+                  label: p.name,
+                }))}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAddPartner}
+              disabled={!partnerPickerValue || mutatingAssigned}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground',
+                !partnerPickerValue || mutatingAssigned
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'hover:bg-primary/90',
+              )}
+            >
+              {mutatingAssigned ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <UserPlus className="size-4" strokeWidth={2.4} />
+              )}
+              Añadir
+            </button>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }
@@ -401,14 +550,14 @@ function InfoGrid({
       <ReadRow label="Código">
         <span className="font-mono">{salePoint.code}</span>
       </ReadRow>
-      <ReadRow label="Socio">
+      <ReadRow label="Encargado">
         {partnerName ? (
           <span className="inline-flex items-center gap-1">
             <Handshake className="size-3.5 text-indigo-600" />
             {partnerName}
           </span>
         ) : (
-          <span className="text-muted-foreground/60">Sin asignar</span>
+          <span className="text-muted-foreground/60">Sin encargado</span>
         )}
       </ReadRow>
       <ReadRow label="Creada">
@@ -477,14 +626,14 @@ function InfoEditForm({
         />
       </Field>
 
-      <Field label="Socio asignado" hint="Vacío = opera el owner">
+      <Field label="Encargado de sucursal" hint="Vacío = opera el owner">
         <Select
           value={form.ownerPartnerId}
           onChange={(v) => onChange('ownerPartnerId', v)}
           leadingIcon={<Handshake className="size-4" />}
-          placeholder="Sin asignar (opera el owner)"
+          placeholder="Sin encargado (opera el owner)"
           options={[
-            { value: '', label: 'Sin asignar (opera el owner)' },
+            { value: '', label: 'Sin encargado (opera el owner)' },
             ...partners.map((p) => ({ value: p.id, label: p.name })),
           ]}
         />

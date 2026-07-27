@@ -71,7 +71,7 @@ export function CreateSalePointModal({ open, onClose }: Props) {
       open={open}
       onClose={onClose}
       title="Nueva sucursal"
-      description="Crea un puesto de venta y opcionalmente asígnalo a un socio."
+      description="Crea un puesto de venta y opcionalmente asigna un encargado."
       size="max-w-xl"
       footer={
         <>
@@ -139,11 +139,11 @@ export function CreateSalePointModal({ open, onClose }: Props) {
         </Field>
 
         <Field
-          label="Socio asignado"
+          label="Encargado de sucursal"
           hint={
             partners.length === 0
               ? 'Aún no hay socios. Crea uno desde Usuarios primero.'
-              : 'Opcional — déjala sin asignar para operarla tú mismo.'
+              : 'Opcional — déjalo sin asignar para operarla tú mismo.'
           }
         >
           <Select
@@ -153,11 +153,11 @@ export function CreateSalePointModal({ open, onClose }: Props) {
             placeholder={
               loadingPartners
                 ? 'Cargando socios…'
-                : 'Sin asignar (opera el owner)'
+                : 'Sin encargado (opera el owner)'
             }
             disabled={loadingPartners}
             options={[
-              { value: '', label: 'Sin asignar (opera el owner)' },
+              { value: '', label: 'Sin encargado (opera el owner)' },
               ...partners.map((p) => ({ value: p.id, label: p.name })),
             ]}
           />

@@ -7,8 +7,9 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
+import { useSession } from '@/features/auth/hooks/use-session';
 import { GamePrizeRow } from '@/features/game-prizes/components/game-prize-row';
 import { useEffectiveGamePrizes } from '@/features/game-prizes/hooks/use-game-prizes';
 import { useGames } from '@/features/games/hooks/use-games';
@@ -17,6 +18,8 @@ import { useSaleLimits } from '@/features/sale-limits/hooks/use-sale-limits';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { APP_ROUTES } from '@/shared/constants/routes';
 import { cn } from '@/shared/lib/cn';
+
+import { UserRole } from '@/features/users/types';
 
 import type { SalePoint } from '@/features/sale-points/types';
 
@@ -50,11 +53,16 @@ const SECTIONS: readonly SectionDef[] = [
 export function SucursalConfigPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const session = useSession();
   const [selectedSection, setSelectedSection] = useState<string>(
     SECTIONS[0].key,
   );
 
   const { data: salePoints, isLoading } = useSalePoints();
+
+  if (session && session.user.role !== UserRole.ADMIN) {
+    return <Navigate to={APP_ROUTES.sucursales} replace />;
+  }
   const salePoint = useMemo(
     () => (salePoints ?? []).find((sp) => sp.id === id) ?? null,
     [salePoints, id],

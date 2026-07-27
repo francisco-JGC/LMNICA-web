@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   createSalePoint,
   listSalePoints,
+  setAssignedPartners,
   toggleSalePoint,
   updateSalePoint,
 } from '@/features/sale-points/api/sale-points.api';
@@ -12,6 +13,7 @@ import { toApiError } from '@/shared/api/error-mapper';
 import type {
   CreateSalePointPayload,
   SalePoint,
+  SetAssignedPartnersPayload,
   UpdateSalePointPayload,
 } from '@/features/sale-points/types';
 import type { ApiError } from '@/shared/types/api';
@@ -109,6 +111,32 @@ export function useUpdateSalePoint() {
     },
     onError: (error) => {
       toast.error('No se pudo actualizar la sucursal', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+export function useSetAssignedPartners() {
+  const qc = useQueryClient();
+  return useMutation<
+    SalePoint,
+    ApiError,
+    { id: string; payload: SetAssignedPartnersPayload }
+  >({
+    mutationFn: async ({ id, payload }) => {
+      try {
+        return await setAssignedPartners(id, payload);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    onSuccess: (sp) => {
+      toast.success(`Socios asignados actualizados en "${sp.name}"`);
+      qc.invalidateQueries({ queryKey: salePointsQueryKeys.all });
+    },
+    onError: (error) => {
+      toast.error('No se pudieron actualizar los socios asignados', {
         description: error.message,
       });
     },

@@ -44,7 +44,7 @@ export function SucursalesPage() {
   const toggle = useToggleSalePoint();
 
   // Partners list only makes sense for the admin view (to resolve names
-  // for the "Socio" column). Partners see only their own sucursales,
+  // for the "Encargado" column). Partners see only their own sucursales,
   // so the extra fetch would return nothing useful and hits a role-gated
   // endpoint they can still call but that adds no value.
   const { data: partnersPage } = useUsers(
@@ -140,9 +140,11 @@ export function SucursalesPage() {
               <tr>
                 <th className="px-6 py-3">Sucursal</th>
                 <th className="px-6 py-3">Código</th>
-                {isAdmin && <th className="px-6 py-3">Socio</th>}
+                {isAdmin && <th className="px-6 py-3">Encargado</th>}
                 <th className="px-6 py-3 text-right">Acceso</th>
-                <th className="w-12 px-2 py-3" aria-label="Configuración" />
+                {isAdmin && (
+                  <th className="w-12 px-2 py-3" aria-label="Configuración" />
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -153,7 +155,7 @@ export function SucursalesPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={isAdmin ? 5 : 4}
+                    colSpan={isAdmin ? 5 : 3}
                     className="px-6 py-14 text-center text-sm text-muted-foreground"
                   >
                     {search || filter !== 'all'
@@ -169,6 +171,7 @@ export function SucursalesPage() {
                     key={sp.id}
                     salePoint={sp}
                     showPartner={isAdmin}
+                    showConfig={isAdmin}
                     partnerName={
                       sp.ownerPartnerId
                         ? partnerById.get(sp.ownerPartnerId)?.name ?? null
@@ -212,6 +215,7 @@ function SucursalRow({
   salePoint,
   partnerName,
   showPartner,
+  showConfig,
   isToggling,
   onToggle,
   onOpen,
@@ -219,6 +223,7 @@ function SucursalRow({
   salePoint: SalePoint;
   partnerName: string | null;
   showPartner: boolean;
+  showConfig: boolean;
   isToggling: boolean;
   onToggle: (next: boolean) => void;
   onOpen: () => void;
@@ -274,19 +279,21 @@ function SucursalRow({
           label={salePoint.isActive ? 'Activa' : 'Inactiva'}
         />
       </td>
-      <td
-        className="w-12 px-2 py-3.5 text-right"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Link
-          to={sucursalConfigPath(salePoint.id)}
-          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-          title="Configuración"
-          aria-label={`Configurar ${salePoint.name}`}
+      {showConfig && (
+        <td
+          className="w-12 px-2 py-3.5 text-right"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Settings className="size-4" strokeWidth={2.2} />
-        </Link>
-      </td>
+          <Link
+            to={sucursalConfigPath(salePoint.id)}
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="Configuración"
+            aria-label={`Configurar ${salePoint.name}`}
+          >
+            <Settings className="size-4" strokeWidth={2.2} />
+          </Link>
+        </td>
+      )}
     </tr>
   );
 }
@@ -340,7 +347,7 @@ function Toggle({
 }
 
 function SkeletonRow({ showPartner }: { showPartner: boolean }) {
-  const cells = showPartner ? 5 : 4;
+  const cells = showPartner ? 5 : 3;
   return (
     <tr>
       {Array.from({ length: cells }).map((_, i) => (

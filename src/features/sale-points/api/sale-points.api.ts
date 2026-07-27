@@ -3,6 +3,7 @@ import { http } from '@/shared/api/http';
 import type {
   CreateSalePointPayload,
   SalePoint,
+  SetAssignedPartnersPayload,
   UpdateSalePointPayload,
 } from '@/features/sale-points/types';
 
@@ -33,5 +34,16 @@ export async function updateSalePoint(
   payload: UpdateSalePointPayload,
 ): Promise<SalePoint> {
   const { data } = await http.patch<SalePoint>(`/sale-points/${id}`, payload);
+  return data;
+}
+
+export async function setAssignedPartners(
+  id: string,
+  payload: SetAssignedPartnersPayload,
+): Promise<SalePoint> {
+  const { data } = await http.put<SalePoint>(
+    `/sale-points/${id}/assigned-partners`,
+    payload,
+  );
   return data;
 }
