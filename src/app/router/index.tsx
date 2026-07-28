@@ -135,7 +135,7 @@ function ChunkErrorBoundary() {
         : String(error);
 
   const looksLikeChunkError =
-    /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported|not a valid JavaScript MIME type/i.test(
+    /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported|Importing a module script failed|not a valid JavaScript MIME type|error loading dynamically imported/i.test(
       message,
     );
 
