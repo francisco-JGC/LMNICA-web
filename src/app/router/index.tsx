@@ -78,6 +78,11 @@ const SucursalesPage = lazy(() =>
     default: m.SucursalesPage,
   })),
 );
+const SystemConfigPage = lazy(() =>
+  import('@/features/feature-flags/pages/system-config-page').then((m) => ({
+    default: m.SystemConfigPage,
+  })),
+);
 const SalesPage = lazy(() =>
   import('@/features/tickets/pages/sales-page').then((m) => ({
     default: m.SalesPage,
@@ -136,6 +141,7 @@ const router = createBrowserRouter([
               { path: APP_ROUTES.draws, element: <DrawsPage /> },
               { path: APP_ROUTES.saleLimits, element: <SaleLimitsPage /> },
               { path: APP_ROUTES.latestResults, element: <LatestResultsPage /> },
+              { path: APP_ROUTES.systemConfig, element: <SystemConfigPage /> },
             ],
           },
         ],

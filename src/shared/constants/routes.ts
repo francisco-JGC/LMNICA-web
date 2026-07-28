@@ -23,6 +23,7 @@ export const APP_ROUTES = {
   draws: '/sorteos',
   saleLimits: '/limites-venta',
   latestResults: '/ultimos-resultados',
+  systemConfig: '/configuracion-sistema',
 } as const;
 
 /** Concrete `/sucursales/{id}/configuracion` URL for navigation. */

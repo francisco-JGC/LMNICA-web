@@ -10,6 +10,7 @@ import {
   PlusSquare,
   Receipt,
   Repeat,
+  Settings2,
   ShieldAlert,
   Trophy,
   User,
@@ -87,6 +88,12 @@ const NAV_ITEMS: readonly NavItem[] = [
     to: APP_ROUTES.latestResults,
     label: 'Últimos Resultados',
     icon: History,
+    roles: ADMIN_ONLY,
+  },
+  {
+    to: APP_ROUTES.systemConfig,
+    label: 'Configuración del sistema',
+    icon: Settings2,
     roles: ADMIN_ONLY,
   },
 ] as const;
