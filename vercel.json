@@ -2,11 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
   "rewrites": [
-    {
-      "//": "Negative lookahead: cualquier ruta EXCEPTO /assets/* cae al SPA fallback. Los archivos bajo /assets/* no rewrittean — si el hash del chunk quedó viejo tras un deploy y ya no existe, Vercel devuelve 404 REAL en vez de servir index.html. Así el navegador tira ChunkLoadError legible en vez del confuso 'text/html is not a valid JavaScript MIME type', y nuestro errorBoundary lo detecta y reloadea.",
-      "source": "/((?!assets/).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ],
 
   "headers": [
