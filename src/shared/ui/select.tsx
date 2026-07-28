@@ -180,13 +180,16 @@ export function Select<V extends string>({
                     type="button"
                     disabled={opt.disabled}
                     onMouseEnter={() => setActiveIndex(idx)}
-                    // Handle selection on pointerdown (fires before click +
-                    // any label-click-transfer weirdness) and preventDefault
-                    // so the browser doesn't emit a subsequent click event
-                    // that could reopen the menu or re-focus the trigger.
-                    onPointerDown={(e) => {
+                    // Selección en `click`, no en `pointerdown`. `pointerdown`
+                    // dispara apenas el dedo toca la pantalla en mobile — un
+                    // intento de scroll (drag) seleccionaba la opción donde
+                    // el usuario apoyó el dedo antes de que arrancara a
+                    // arrastrar. `click` solo dispara si el pointer levanta
+                    // cerca del punto inicial: un scroll NO lo dispara, un
+                    // tap sí. En desktop el comportamiento es idéntico.
+                    onClick={(e) => {
                       if (opt.disabled) return;
-                      e.preventDefault();
+                      e.stopPropagation();
                       pickOption(opt);
                     }}
                     className={cn(
