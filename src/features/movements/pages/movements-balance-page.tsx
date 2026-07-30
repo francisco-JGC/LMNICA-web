@@ -243,7 +243,7 @@ function FiltersBar({
           onChange={(e) => onShowSalaryChange(e.target.checked)}
           className="size-4 rounded border-border"
         />
-        Mostrar salario del vendedor (ventas × % de pago)
+        Mostrar salario del vendedor
       </label>
     </div>
   );
