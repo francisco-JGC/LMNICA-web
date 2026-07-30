@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Coins,
+  Hash,
   Loader2,
   MapPin,
   ShieldAlert,
@@ -15,6 +16,7 @@ import { useEffectiveGamePrizes } from '@/features/game-prizes/hooks/use-game-pr
 import { useGames } from '@/features/games/hooks/use-games';
 import { LimitRow } from '@/features/sale-limits/components/limit-row';
 import { useSaleLimits } from '@/features/sale-limits/hooks/use-sale-limits';
+import { LimitsByNumberSection } from '@/features/sale-limits-by-number/components/limits-by-number-section';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { APP_ROUTES } from '@/shared/constants/routes';
 import { cn } from '@/shared/lib/cn';
@@ -39,8 +41,14 @@ const SECTIONS: readonly SectionDef[] = [
   {
     key: 'sale-limits',
     label: 'Límites de venta',
-    description: 'Tope en córdobas por número por sorteo',
+    description: 'Tope general en córdobas por número por sorteo',
     icon: ShieldAlert,
+  },
+  {
+    key: 'sale-limits-by-number',
+    label: 'Límites por número',
+    description: 'Tope específico para un número puntual (prevalece)',
+    icon: Hash,
   },
   {
     key: 'game-prizes',
@@ -125,6 +133,9 @@ export function SucursalConfigPage() {
         <div>
           {selectedSection === 'sale-limits' && (
             <SaleLimitsSection salePoint={salePoint} />
+          )}
+          {selectedSection === 'sale-limits-by-number' && (
+            <LimitsByNumberSection salePoint={salePoint} />
           )}
           {selectedSection === 'game-prizes' && (
             <GamePrizesSection salePoint={salePoint} />
