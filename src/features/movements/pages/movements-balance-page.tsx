@@ -15,8 +15,6 @@ import {
 import { useMovementsBalance } from '@/features/movements/hooks/use-movements-balance';
 import { useSellerReport } from '@/features/reports/hooks/use-seller-report';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
-import { useUsers } from '@/features/users/hooks/use-users';
-import { UserRole } from '@/features/users/types';
 import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
 import { Select } from '@/shared/ui/select';
@@ -61,21 +59,21 @@ export function MovementsBalancePage() {
   );
 
   const balanceQuery = useMovementsBalance(rangeParams);
-  const sellerQuery = useSellerReport({
-    ...rangeParams,
-    sellerId: sellerId || undefined,
-  });
+  // No pasamos `sellerId` a la query — traemos TODOS los vendedores en
+  // scope (respetando sucursal + partner scope + rango) y filtramos
+  // localmente. Con esto el dropdown se puebla con la misma fuente,
+  // evitando el bug donde `useUsers` con partner scoping (por
+  // `createdById`) devolvía lista vacía si los sellers fueron creados
+  // por un admin y no por el partner logueado.
+  const sellerQuery = useSellerReport(rangeParams);
 
   const { data: salePoints } = useSalePoints();
-  const { data: sellersPage } = useUsers({
-    role: UserRole.SELLER,
-    limit: 200,
-    offset: 0,
-  });
 
   const balanceRows = balanceQuery.data?.items ?? [];
-  const sellerRows = sellerQuery.data?.items ?? [];
-  const inSellerMode = sellerId.length > 0;
+  const allSellerRows = sellerQuery.data?.items ?? [];
+  const sellerRows = sellerId
+    ? allSellerRows.filter((s) => s.sellerId === sellerId)
+    : allSellerRows;
 
   return (
     <div className="space-y-6">
@@ -99,35 +97,80 @@ export function MovementsBalancePage() {
         salePoints={salePoints ?? []}
         sellerId={sellerId}
         onSellerChange={setSellerId}
-        sellers={sellersPage?.items ?? []}
+        sellers={allSellerRows.map((r) => ({
+          id: r.sellerId,
+          name: r.sellerName,
+        }))}
         from={from}
         onFromChange={setFrom}
         to={to}
         onToChange={setTo}
         showSalary={showSalary}
         onShowSalaryChange={setShowSalary}
-        inSellerMode={inSellerMode}
       />
 
-      {balanceQuery.error && !inSellerMode && (
-        <ErrorBox message={balanceQuery.error.message} />
-      )}
-      {sellerQuery.error && inSellerMode && (
-        <ErrorBox message={sellerQuery.error.message} />
-      )}
+      <section className="space-y-3">
+        <SectionHeader
+          icon={<User className="size-4" />}
+          title="Vendedores"
+          hint={
+            sellerId
+              ? '1 vendedor filtrado'
+              : `${sellerRows.length} vendedor${sellerRows.length === 1 ? '' : 'es'}`
+          }
+        />
+        {sellerQuery.error ? (
+          <ErrorBox message={sellerQuery.error.message} />
+        ) : (
+          <SellerCards
+            rows={sellerRows}
+            loading={sellerQuery.isLoading}
+            showSalary={showSalary}
+          />
+        )}
+      </section>
 
-      {inSellerMode ? (
-        <SellerCards
-          rows={sellerRows}
-          loading={sellerQuery.isLoading}
-          showSalary={showSalary}
+      <section className="space-y-3">
+        <SectionHeader
+          icon={<MapPin className="size-4" />}
+          title="Sucursales"
+          hint={
+            salePointId
+              ? '1 sucursal filtrada'
+              : `${balanceRows.length} sucursal${balanceRows.length === 1 ? '' : 'es'}`
+          }
         />
-      ) : (
-        <BranchCards
-          rows={balanceRows}
-          loading={balanceQuery.isLoading}
-        />
-      )}
+        {balanceQuery.error ? (
+          <ErrorBox message={balanceQuery.error.message} />
+        ) : (
+          <BranchCards
+            rows={balanceRows}
+            loading={balanceQuery.isLoading}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  hint,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex size-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        {icon}
+      </span>
+      <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+        {title}
+      </h2>
+      <span className="text-[11px] text-muted-foreground">· {hint}</span>
     </div>
   );
 }
@@ -145,7 +188,6 @@ function FiltersBar({
   onToChange,
   showSalary,
   onShowSalaryChange,
-  inSellerMode,
 }: {
   salePointId: string;
   onSalePointChange: (v: string) => void;
@@ -159,7 +201,6 @@ function FiltersBar({
   onToChange: (v: string) => void;
   showSalary: boolean;
   onShowSalaryChange: (v: boolean) => void;
-  inSellerMode: boolean;
 }) {
   return (
     <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -195,17 +236,15 @@ function FiltersBar({
           <DateField value={to} min={from} onChange={onToChange} />
         </Field>
       </div>
-      {inSellerMode && (
-        <label className="flex items-center gap-2 pt-1 text-sm text-foreground">
-          <input
-            type="checkbox"
-            checked={showSalary}
-            onChange={(e) => onShowSalaryChange(e.target.checked)}
-            className="size-4 rounded border-border"
-          />
-          Mostrar salario del vendedor (ventas × % de pago)
-        </label>
-      )}
+      <label className="flex items-center gap-2 pt-1 text-sm text-foreground">
+        <input
+          type="checkbox"
+          checked={showSalary}
+          onChange={(e) => onShowSalaryChange(e.target.checked)}
+          className="size-4 rounded border-border"
+        />
+        Mostrar salario del vendedor (ventas × % de pago)
+      </label>
     </div>
   );
 }
