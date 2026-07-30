@@ -5,7 +5,13 @@ export interface SellerReportRow {
   voidedCount: number;
   paidCount: number;
   billed: number;
+  /** Ya pagado (informacional). */
   paidPrize: number;
+  /**
+   * Total ganado por los tickets del vendedor esté pagado o no.
+   * "Lo que debería entregar" en la UI.
+   */
+  wonPrize: number;
   paymentPercentage: number | null;
   /** `billed × paymentPercentage / 100` rounded — null when % not set. */
   salary: number | null;

@@ -27,10 +27,17 @@ export interface MovementsBalanceRow {
   ownerPartnerId: string | null;
   ownerPartnerName: string | null;
   billed: number;
+  /** Ya pagado (informacional). */
   paidPrize: number;
+  /**
+   * Total ganado por los tickets del rango, esté pagado o no.
+   * "Lo que debería entregar" en la UI. Usado en el cálculo de `net`.
+   */
+  wonPrize: number;
   deposits: number;
   withdrawals: number;
   expenses: number;
+  /** net = billed - wonPrize + deposits - withdrawals - expenses */
   net: number;
 }
 
