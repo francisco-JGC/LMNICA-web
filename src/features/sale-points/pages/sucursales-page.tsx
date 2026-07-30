@@ -40,7 +40,11 @@ export function SucursalesPage() {
   const session = useSession();
   const isAdmin = session?.user.role === UserRole.ADMIN;
 
-  const { data, isLoading, isFetching, error } = useSalePoints();
+  // El admin ve inactivas para poder reactivarlas; partners ni siquiera
+  // deberían verlas — el backend igual filtra su lado en cualquier caso.
+  const { data, isLoading, isFetching, error } = useSalePoints({
+    includeInactive: isAdmin,
+  });
   const toggle = useToggleSalePoint();
 
   // Partners list only makes sense for the admin view (to resolve names

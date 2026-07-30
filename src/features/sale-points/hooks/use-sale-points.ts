@@ -20,15 +20,26 @@ import type { ApiError } from '@/shared/types/api';
 
 export const salePointsQueryKeys = {
   all: ['sale-points'] as const,
-  list: () => [...salePointsQueryKeys.all, 'list'] as const,
+  list: (opts?: { includeInactive?: boolean }) =>
+    [
+      ...salePointsQueryKeys.all,
+      'list',
+      opts?.includeInactive ? 'with-inactive' : 'active-only',
+    ] as const,
 };
 
-export function useSalePoints() {
+/**
+ * Por defecto trae solo sucursales ACTIVAS — es lo que los dropdowns,
+ * selectores, y reportes deben ver. Pasar `includeInactive: true` **solo**
+ * desde la página de administración de sucursales (para que el admin
+ * pueda reactivarlas).
+ */
+export function useSalePoints(options?: { includeInactive?: boolean }) {
   return useQuery<SalePoint[], ApiError>({
-    queryKey: salePointsQueryKeys.list(),
+    queryKey: salePointsQueryKeys.list(options),
     queryFn: async () => {
       try {
-        return await listSalePoints();
+        return await listSalePoints(options);
       } catch (error) {
         throw toApiError(error);
       }

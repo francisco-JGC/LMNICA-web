@@ -7,8 +7,12 @@ import type {
   UpdateSalePointPayload,
 } from '@/features/sale-points/types';
 
-export async function listSalePoints(): Promise<SalePoint[]> {
-  const { data } = await http.get<SalePoint[]>('/sale-points');
+export async function listSalePoints(options?: {
+  includeInactive?: boolean;
+}): Promise<SalePoint[]> {
+  const { data } = await http.get<SalePoint[]>('/sale-points', {
+    params: options?.includeInactive ? { includeInactive: 'true' } : {},
+  });
   return data;
 }
 
