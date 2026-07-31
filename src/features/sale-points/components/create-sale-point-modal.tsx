@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Handshake, Loader2, MapPin, Save } from 'lucide-react';
+import { Handshake, Loader2, MapPin, Percent, Save } from 'lucide-react';
 
 import { useCreateSalePoint } from '@/features/sale-points/hooks/use-sale-points';
 import { useUsers } from '@/features/users/hooks/use-users';
@@ -17,9 +17,16 @@ interface FormState {
   name: string;
   code: string;
   ownerPartnerId: string;
+  /** String para permitir vacío en el input; se convierte a number al submit. */
+  partnerPaymentPercentage: string;
 }
 
-const EMPTY: FormState = { name: '', code: '', ownerPartnerId: '' };
+const EMPTY: FormState = {
+  name: '',
+  code: '',
+  ownerPartnerId: '',
+  partnerPaymentPercentage: '',
+};
 
 export function CreateSalePointModal({ open, onClose }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -48,10 +55,17 @@ export function CreateSalePointModal({ open, onClose }: Props) {
     name: form.name.trim(),
     code: form.code.trim(),
   };
+  const pctRaw = form.partnerPaymentPercentage.trim();
+  const pctValid =
+    pctRaw === '' ||
+    (/^\d+$/.test(pctRaw) &&
+      Number(pctRaw) >= 0 &&
+      Number(pctRaw) <= 100);
   const isValid =
     trimmed.name.length > 0 &&
     trimmed.code.length >= 2 &&
-    /^[A-Za-z0-9-]+$/.test(trimmed.code);
+    /^[A-Za-z0-9-]+$/.test(trimmed.code) &&
+    pctValid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +74,7 @@ export function CreateSalePointModal({ open, onClose }: Props) {
       name: trimmed.name,
       code: trimmed.code,
       ownerPartnerId: form.ownerPartnerId || undefined,
+      partnerPaymentPercentage: pctRaw === '' ? null : Number(pctRaw),
     });
     onClose();
   };
@@ -161,6 +176,27 @@ export function CreateSalePointModal({ open, onClose }: Props) {
               ...partners.map((p) => ({ value: p.id, label: p.name })),
             ]}
           />
+        </Field>
+
+        <Field
+          label="% de pago al encargado"
+          hint="Entero 0–100. % de las ventas semanales de la sucursal que se le paga al encargado. Dejalo vacío si no cobra."
+        >
+          <div className="relative">
+            <Percent className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              value={form.partnerPaymentPercentage}
+              onChange={(e) =>
+                set('partnerPaymentPercentage', e.target.value)
+              }
+              placeholder="ej. 10"
+              className={cn(inputClass, 'pl-9')}
+            />
+          </div>
         </Field>
 
         {error && (
