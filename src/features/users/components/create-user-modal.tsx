@@ -100,9 +100,14 @@ export function CreateUserModal({ open, onClose }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || isPending) return;
-    // Payroll fields only make sense for sellers; strip them for other
-    // roles so we don't send meaningless data.
+    // `paymentPercentage` aplica tanto a vendedor (comisión sobre sus
+    // propias ventas) como a socio (comisión sobre las ventas de la
+    // sucursal que dirige como encargado). `salePointId` sigue siendo
+    // solo para vendedores — un socio se asigna como encargado desde el
+    // modal de la sucursal.
     const isSeller = form.role === UserRole.SELLER;
+    const isPartner = form.role === UserRole.PARTNER;
+    const usesPayrollPct = isSeller || isPartner;
     await mutateAsync({
       name: trimmed.name,
       username: trimmed.username,
@@ -112,7 +117,9 @@ export function CreateUserModal({ open, onClose }: Props) {
       address: trimmed.address || undefined,
       nationalId: trimmed.nationalId || undefined,
       paymentPercentage:
-        isSeller && form.paymentPercentage ? paymentPercentage : undefined,
+        usesPayrollPct && form.paymentPercentage
+          ? paymentPercentage
+          : undefined,
       salePointId: isSeller ? form.salePointId || undefined : undefined,
     });
     onClose();
@@ -255,50 +262,55 @@ export function CreateUserModal({ open, onClose }: Props) {
           </Field>
         )}
 
-        {form.role === UserRole.SELLER && (
-          <>
-            <Field
-              label="Porcentaje de pago"
-              hint="Comisión semanal sobre el total de ventas"
-            >
-              <div className="relative">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100}
-                  value={form.paymentPercentage}
-                  onChange={(e) => set('paymentPercentage', e.target.value)}
-                  placeholder="ej. 13"
-                  className={cn(inputClass, 'pr-8')}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  %
-                </span>
-              </div>
-            </Field>
-
-            <Field label="Sucursal" required={isPartner}>
-              <Select
-                value={form.salePointId}
-                onChange={(v) => set('salePointId', v)}
-                leadingIcon={<MapPin className="size-4" />}
-                placeholder={
-                  loadingSalePoints ? 'Cargando…' : 'Seleccione una sucursal'
-                }
-                disabled={loadingSalePoints}
-                options={[
-                  ...(isPartner
-                    ? []
-                    : [{ value: '', label: 'Sin sucursal' }]),
-                  ...(salePoints?.map((sp) => ({
-                    value: sp.id,
-                    label: sp.name,
-                  })) ?? []),
-                ]}
+        {(form.role === UserRole.SELLER ||
+          form.role === UserRole.PARTNER) && (
+          <Field
+            label="Porcentaje de pago"
+            hint={
+              form.role === UserRole.PARTNER
+                ? 'Comisión semanal sobre las ventas de la sucursal que dirige como encargado'
+                : 'Comisión semanal sobre el total de ventas del vendedor'
+            }
+          >
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                value={form.paymentPercentage}
+                onChange={(e) => set('paymentPercentage', e.target.value)}
+                placeholder="ej. 13"
+                className={cn(inputClass, 'pr-8')}
               />
-            </Field>
-          </>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                %
+              </span>
+            </div>
+          </Field>
+        )}
+
+        {form.role === UserRole.SELLER && (
+          <Field label="Sucursal" required={isPartner}>
+            <Select
+              value={form.salePointId}
+              onChange={(v) => set('salePointId', v)}
+              leadingIcon={<MapPin className="size-4" />}
+              placeholder={
+                loadingSalePoints ? 'Cargando…' : 'Seleccione una sucursal'
+              }
+              disabled={loadingSalePoints}
+              options={[
+                ...(isPartner
+                  ? []
+                  : [{ value: '', label: 'Sin sucursal' }]),
+                ...(salePoints?.map((sp) => ({
+                  value: sp.id,
+                  label: sp.name,
+                })) ?? []),
+              ]}
+            />
+          </Field>
         )}
 
         <Field label="Teléfono" hint="ej. 8888-9999">

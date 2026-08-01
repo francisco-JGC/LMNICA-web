@@ -106,9 +106,13 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
 
   const handleSave = async () => {
     if (!isValid || isPending) return;
-    // Non-sellers cannot hold a salePointId nor a paymentPercentage. If the
-    // role is (or is becoming) non-seller, force those to null in the diff.
+    // `paymentPercentage` aplica a vendedor (sobre sus propias ventas) y
+    // a socio (sobre las ventas de la sucursal que dirige como encargado).
+    // `salePointId` sigue siendo solo para vendedores — la relación de un
+    // socio con su sucursal se maneja desde el modal de la sucursal.
     const isSeller = form.role === UserRole.SELLER;
+    const isPartner = form.role === UserRole.PARTNER;
+    const usesPayrollPct = isSeller || isPartner;
     await mutateAsync({
       id: user.id,
       payload: {
@@ -118,7 +122,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
         phone: diffNullable(trimmed.phone, user.phone),
         address: diffNullable(trimmed.address, user.address),
         nationalId: diffNullable(trimmed.nationalId, user.nationalId),
-        paymentPercentage: isSeller
+        paymentPercentage: usesPayrollPct
           ? diffNullableNumber(form.paymentPercentage, user.paymentPercentage)
           : user.paymentPercentage !== null
             ? null
@@ -479,45 +483,50 @@ function EditForm({
         </div>
       </Field>
 
-      {form.role === UserRole.SELLER && (
-        <>
-          <Field
-            label="Porcentaje de pago"
-            hint="Comisión semanal sobre el total de ventas"
-          >
-            <div className="relative">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={100}
-                value={form.paymentPercentage}
-                onChange={(e) => onChange('paymentPercentage', e.target.value)}
-                placeholder="ej. 13"
-                className={cn(inputClass, 'pr-8')}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                %
-              </span>
-            </div>
-          </Field>
-
-          <Field label="Sucursal">
-            <Select
-              value={form.salePointId}
-              onChange={(v) => onChange('salePointId', v)}
-              leadingIcon={<MapPin className="size-4" />}
-              placeholder="Sin sucursal"
-              options={[
-                { value: '', label: 'Sin sucursal' },
-                ...salePoints.map((sp) => ({
-                  value: sp.id,
-                  label: sp.name,
-                })),
-              ]}
+      {(form.role === UserRole.SELLER ||
+        form.role === UserRole.PARTNER) && (
+        <Field
+          label="Porcentaje de pago"
+          hint={
+            form.role === UserRole.PARTNER
+              ? 'Comisión semanal sobre las ventas de la sucursal que dirige como encargado'
+              : 'Comisión semanal sobre el total de ventas del vendedor'
+          }
+        >
+          <div className="relative">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              value={form.paymentPercentage}
+              onChange={(e) => onChange('paymentPercentage', e.target.value)}
+              placeholder="ej. 13"
+              className={cn(inputClass, 'pr-8')}
             />
-          </Field>
-        </>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              %
+            </span>
+          </div>
+        </Field>
+      )}
+
+      {form.role === UserRole.SELLER && (
+        <Field label="Sucursal">
+          <Select
+            value={form.salePointId}
+            onChange={(v) => onChange('salePointId', v)}
+            leadingIcon={<MapPin className="size-4" />}
+            placeholder="Sin sucursal"
+            options={[
+              { value: '', label: 'Sin sucursal' },
+              ...salePoints.map((sp) => ({
+                value: sp.id,
+                label: sp.name,
+              })),
+            ]}
+          />
+        </Field>
       )}
 
       <Field label="Cédula">
