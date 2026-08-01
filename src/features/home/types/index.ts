@@ -12,22 +12,6 @@ export interface GameBreakdownItem {
   paid: number;
 }
 
-export type DrawStatus =
-  | 'settled'
-  | 'result_pending'
-  | 'in_progress'
-  | 'upcoming';
-
-export interface TodayDrawItem {
-  gameId: string;
-  gameName: string;
-  /** Wall-clock time from draw_schedules (e.g., "11:00"). Timezone-free. */
-  drawTime: string;
-  status: DrawStatus;
-  winningNumber: string | null;
-  cutoffMinutes: number;
-}
-
 export interface PendingPayoutPreview {
   ticketId: string;
   folio: string;
@@ -70,7 +54,6 @@ export interface DashboardSummary {
 
   monthlySeries: MonthlySeriesPoint[];
   byGame: GameBreakdownItem[];
-  todayDraws: TodayDrawItem[];
   pendingPayouts: PendingPayouts;
   topSellers: RankingItem[];
   topSalePoints: RankingItem[];

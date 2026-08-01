@@ -33,7 +33,8 @@ function isoDate(d: Date): string {
  * Cálculo de movimientos rediseñado a **cards**. Dos modos:
  *
  * - **Sin vendedor seleccionado** → un card por sucursal con billed,
- *   premios adeudados (wonPrize), premios ya pagados, movements, y el
+ *   premios adeudados (wonPrize), premios ya pagados, movements, el
+ *   salario del encargado según % configurado en la sucursal, y el
  *   `net` grande resaltado en verde/rojo.
  * - **Con vendedor seleccionado** → un card por vendedor con lo que
  *   vendió, pagó, debería pagar (wonPrize), su salario según % (con
@@ -146,6 +147,7 @@ export function MovementsBalancePage() {
           <BranchCards
             rows={balanceRows}
             loading={balanceQuery.isLoading}
+            showSalary={showSalary}
           />
         )}
       </section>
@@ -243,7 +245,7 @@ function FiltersBar({
           onChange={(e) => onShowSalaryChange(e.target.checked)}
           className="size-4 rounded border-border"
         />
-        Mostrar salario del vendedor
+        Mostrar salarios (vendedor y encargado)
       </label>
     </div>
   );
@@ -273,9 +275,11 @@ function CardsScroller({ children }: { children: React.ReactNode }) {
 function BranchCards({
   rows,
   loading,
+  showSalary,
 }: {
   rows: MovementsBalanceRow[];
   loading: boolean;
+  showSalary: boolean;
 }) {
   if (loading && rows.length === 0) {
     return (
@@ -292,14 +296,24 @@ function BranchCards({
   return (
     <CardsScroller>
       {rows.map((row) => (
-        <BranchCard key={row.salePointId} row={row} />
+        <BranchCard key={row.salePointId} row={row} showSalary={showSalary} />
       ))}
     </CardsScroller>
   );
 }
 
-function BranchCard({ row }: { row: MovementsBalanceRow }) {
+function BranchCard({
+  row,
+  showSalary,
+}: {
+  row: MovementsBalanceRow;
+  showSalary: boolean;
+}) {
   const isPositive = row.net >= 0;
+  // Sólo mostramos salario del encargado si hay % configurado en la
+  // sucursal — sin % no cobra (mismo criterio que el SellerCard).
+  const showManagerSalary =
+    showSalary && row.partnerPaymentPercentage !== null;
   return (
     <article
       className={cn(
@@ -348,8 +362,20 @@ function BranchCard({ row }: { row: MovementsBalanceRow }) {
           label="Gastos"
           value={row.expenses}
           tone="rose"
-          className="col-span-2"
+          className={showManagerSalary ? undefined : 'col-span-2'}
         />
+        {showManagerSalary && (
+          <Stat
+            label={`Salario encargado (${row.partnerPaymentPercentage}%)`}
+            value={row.partnerSalary ?? 0}
+            tone="indigo"
+            hint={
+              row.ownerPartnerName
+                ? `Para ${row.ownerPartnerName}`
+                : undefined
+            }
+          />
+        )}
       </dl>
     </article>
   );

@@ -14,7 +14,6 @@ import {
 } from '@/features/home/components/kpi-card';
 import { MonthlyChart } from '@/features/home/components/monthly-chart';
 import { PendingPayoutsCard } from '@/features/home/components/pending-payouts-card';
-import { TodayDrawsCard } from '@/features/home/components/today-draws-card';
 import { TopRankingCard } from '@/features/home/components/top-ranking-card';
 import { useDashboardSummary } from '@/features/home/hooks/use-dashboard-summary';
 import { useSession } from '@/features/auth/hooks/use-session';
@@ -92,12 +91,7 @@ export function HomePage() {
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <TodayDrawsCard items={data.todayDraws} />
-            </div>
-            <PendingPayoutsCard data={data.pendingPayouts} />
-          </div>
+          <PendingPayoutsCard data={data.pendingPayouts} />
         </>
       )}
     </div>
@@ -150,11 +144,8 @@ function HomeSkeleton() {
           />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="h-64 animate-pulse rounded-2xl border border-border/70 bg-card lg:col-span-2" />
-        <div className="h-64 animate-pulse rounded-2xl border border-border/70 bg-card" />
-      </div>
       <div className="h-96 animate-pulse rounded-2xl border border-border/70 bg-card" />
+      <div className="h-64 animate-pulse rounded-2xl border border-border/70 bg-card" />
     </div>
   );
 }

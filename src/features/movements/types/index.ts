@@ -26,6 +26,14 @@ export interface MovementsBalanceRow {
   salePointName: string;
   ownerPartnerId: string | null;
   ownerPartnerName: string | null;
+  /** % semanal configurado en la sucursal para el encargado. */
+  partnerPaymentPercentage: number | null;
+  /**
+   * Salario del encargado sobre las ventas de la sucursal en el rango:
+   * `round(billed * partnerPaymentPercentage / 100)`. `null` cuando no hay
+   * encargado o sin % configurado.
+   */
+  partnerSalary: number | null;
   billed: number;
   /** Ya pagado (informacional). */
   paidPrize: number;

@@ -54,7 +54,8 @@ export function useCreateDrawResult() {
     onSuccess: (result) => {
       toast.success(`Resultado registrado (${result.winningNumber})`);
       qc.invalidateQueries({ queryKey: drawResultsQueryKeys.all });
-      // Dashboard "sorteos de hoy" también depende de este dato.
+      // Los pagos pendientes del dashboard se calculan a partir de los
+      // resultados registrados; hay que refrescarlos.
       qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (error) => {
