@@ -1,6 +1,8 @@
 export interface SellerReportRow {
   sellerId: string;
   sellerName: string;
+  /** Teléfono del vendedor para compartir el reporte por WhatsApp. */
+  sellerPhone: string | null;
   ticketCount: number;
   voidedCount: number;
   paidCount: number;

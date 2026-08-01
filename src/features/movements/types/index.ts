@@ -26,6 +26,8 @@ export interface MovementsBalanceRow {
   salePointName: string;
   ownerPartnerId: string | null;
   ownerPartnerName: string | null;
+  /** Teléfono del encargado para compartir el reporte por WhatsApp. */
+  ownerPartnerPhone: string | null;
   /** % semanal configurado en la sucursal para el encargado. */
   partnerPaymentPercentage: number | null;
   /**

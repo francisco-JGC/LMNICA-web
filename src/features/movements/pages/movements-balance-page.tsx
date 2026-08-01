@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -6,17 +6,20 @@ import {
   Calendar,
   Handshake,
   MapPin,
+  Share2,
   TrendingDown,
   TrendingUp,
   User,
   UserSearch,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useMovementsBalance } from '@/features/movements/hooks/use-movements-balance';
 import { useSellerReport } from '@/features/reports/hooks/use-seller-report';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
+import { shareCardImage } from '@/shared/lib/share-whatsapp';
 import { Select } from '@/shared/ui/select';
 
 import type { MovementsBalanceRow } from '@/features/movements/types';
@@ -309,6 +312,7 @@ function BranchCard({
   row: MovementsBalanceRow;
   showSalary: boolean;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
   const isPositive = row.net >= 0;
   // Sólo mostramos salario del encargado si hay % configurado en la
   // sucursal — sin % no cobra (mismo criterio que el SellerCard).
@@ -316,6 +320,7 @@ function BranchCard({
     showSalary && row.partnerPaymentPercentage !== null;
   return (
     <article
+      ref={cardRef}
       className={cn(
         'flex min-w-[280px] flex-none snap-start flex-col rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:min-w-0 sm:flex-auto',
         isPositive ? 'border-emerald-200/60' : 'border-rose-200/60',
@@ -338,6 +343,19 @@ function BranchCard({
             </div>
           )}
         </div>
+        <ShareButton
+          getElement={() => cardRef.current}
+          phone={row.ownerPartnerPhone}
+          disabledReason={
+            !row.ownerPartnerId
+              ? 'Sin encargado asignado'
+              : !row.ownerPartnerPhone
+                ? 'Encargado sin teléfono'
+                : null
+          }
+          fileName={`sucursal-${row.salePointName.replace(/\s+/g, '-').toLowerCase()}.png`}
+          message={`Reporte de ${row.salePointName} — Restante: ${formatCurrency(row.net)}.`}
+        />
       </header>
 
       <NetBanner value={row.net} />
@@ -418,12 +436,14 @@ function SellerCard({
   row: SellerReportRow;
   showSalary: boolean;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
   // Ganancia neta del vendedor = ventas - premios que debería entregar
   // (independiente de los movements, que son a nivel sucursal).
   const net = row.billed - row.wonPrize;
   const isPositive = net >= 0;
   return (
     <article
+      ref={cardRef}
       className={cn(
         'flex min-w-[280px] flex-none snap-start flex-col rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:min-w-0 sm:flex-auto',
         isPositive ? 'border-emerald-200/60' : 'border-rose-200/60',
@@ -444,6 +464,15 @@ function SellerCard({
             {row.voidedCount > 0 && ` · ${row.voidedCount} anulado(s)`}
           </div>
         </div>
+        <ShareButton
+          getElement={() => cardRef.current}
+          phone={row.sellerPhone}
+          disabledReason={
+            !row.sellerPhone ? 'Vendedor sin teléfono' : null
+          }
+          fileName={`vendedor-${row.sellerName.replace(/\s+/g, '-').toLowerCase()}.png`}
+          message={`Reporte de ${row.sellerName} — Vendido: ${formatCurrency(row.billed)}.`}
+        />
       </header>
 
       <NetBanner value={net} />
@@ -650,5 +679,82 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Botón "compartir por WhatsApp" que aparece en la esquina de cada card.
+ * - Habilitado → captura la card como PNG y comparte vía Web Share API
+ *   (móvil) o descarga imagen + abre `wa.me/<phone>` (desktop).
+ * - Deshabilitado (sin teléfono / sin encargado) → tooltip explicativo,
+ *   el ícono se atenúa.
+ *
+ * El botón trae `data-share-hide="true"` para que la utilidad de captura
+ * lo omita — así no aparece dentro de la imagen resultante.
+ */
+function ShareButton({
+  getElement,
+  phone,
+  disabledReason,
+  fileName,
+  message,
+}: {
+  getElement: () => HTMLElement | null;
+  phone: string | null;
+  disabledReason: string | null;
+  fileName: string;
+  message: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const disabled = disabledReason !== null;
+
+  const handleClick = async () => {
+    if (disabled || busy) return;
+    const el = getElement();
+    if (!el) return;
+    setBusy(true);
+    try {
+      const result = await shareCardImage({
+        element: el,
+        phone,
+        message,
+        fileName,
+      });
+      if (result.ok) {
+        toast.success(
+          result.mode === 'native'
+            ? 'Compartido por WhatsApp'
+            : 'Imagen descargada — abrí el chat para adjuntarla',
+        );
+      } else if (result.reason === 'cancelled') {
+        // Silencio — el usuario canceló el picker.
+      } else if (result.reason === 'no_phone') {
+        toast.error('No hay teléfono configurado');
+      } else {
+        toast.error('No se pudo generar la imagen');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      data-share-hide="true"
+      onClick={handleClick}
+      disabled={disabled || busy}
+      title={disabled ? (disabledReason ?? undefined) : 'Compartir por WhatsApp'}
+      aria-label="Compartir por WhatsApp"
+      className={cn(
+        'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-emerald-700 transition',
+        disabled
+          ? 'cursor-not-allowed bg-muted/50 text-muted-foreground/50'
+          : 'bg-emerald-500/10 hover:bg-emerald-500/20',
+        busy && 'animate-pulse',
+      )}
+    >
+      <Share2 className="size-4" strokeWidth={2.4} />
+    </button>
   );
 }
