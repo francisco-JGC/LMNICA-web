@@ -11,6 +11,7 @@ import {
 
 import { useGames } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
+import { TicketDetailsModal } from '@/features/tickets/components/ticket-details-modal';
 import { useUsers } from '@/features/users/hooks/use-users';
 import { WinnerDetailsModal } from '@/features/winners/components/winner-details-modal';
 import { useWinners } from '@/features/winners/hooks/use-winners';
@@ -24,6 +25,7 @@ import { Select } from '@/shared/ui/select';
 
 import type { Game } from '@/features/games/types';
 import type { SalePoint } from '@/features/sale-points/types';
+import type { Ticket } from '@/features/tickets/types';
 import { UserRole } from '@/features/users/types';
 import type { User } from '@/features/users/types';
 import type { WinningTicket } from '@/features/winners/types';
@@ -58,6 +60,10 @@ export function WinnersPage() {
   const [to, setTo] = useState<string>(isoDate(new Date()));
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<WinningTicket | null>(null);
+  // Ticket completo abierto desde el modal de ganador. Solo uno de los
+  // dos modales está visible a la vez — al abrir el detalle cerramos el
+  // de ganador para no apilarlos.
+  const [viewingTicket, setViewingTicket] = useState<Ticket | null>(null);
 
   const params = useMemo(
     () => ({
@@ -287,6 +293,30 @@ export function WinnersPage() {
             salePointById.get(selected.ticket.salePointId)?.name ?? null
           }
           onClose={() => setSelected(null)}
+          onViewTicket={() => {
+            // Un ganador implica que el sorteo ya se ejecutó. Forzamos
+            // `drawExecuted: true` para que el modal de detalle no
+            // habilite el botón de anular (que solo aplica antes del
+            // sorteo). El endpoint de ganadores no lo emite bien hoy.
+            setViewingTicket({
+              ...selected.ticket,
+              drawExecuted: true,
+            });
+            setSelected(null);
+          }}
+        />
+      )}
+
+      {viewingTicket && (
+        <TicketDetailsModal
+          open
+          onClose={() => setViewingTicket(null)}
+          ticket={viewingTicket}
+          gameName={gameById.get(viewingTicket.gameId)?.name ?? null}
+          sellerName={userById.get(viewingTicket.sellerId)?.name ?? null}
+          salePointName={
+            salePointById.get(viewingTicket.salePointId)?.name ?? null
+          }
         />
       )}
     </div>

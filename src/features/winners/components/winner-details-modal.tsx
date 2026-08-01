@@ -1,4 +1,10 @@
-import { Check, Loader2, Ticket as TicketIcon, Trophy } from 'lucide-react';
+import {
+  Check,
+  ExternalLink,
+  Loader2,
+  Ticket as TicketIcon,
+  Trophy,
+} from 'lucide-react';
 
 import { useMarkTicketPaid } from '@/features/winners/hooks/use-winners';
 import { cn } from '@/shared/lib/cn';
@@ -13,6 +19,11 @@ interface Props {
   sellerName: string | null;
   salePointName: string | null;
   onClose: () => void;
+  /**
+   * Opcional. Si se provee, se muestra un ícono al lado del folio que
+   * cierra este modal y abre el detalle completo del ticket de venta.
+   */
+  onViewTicket?: () => void;
 }
 
 export function WinnerDetailsModal({
@@ -21,6 +32,7 @@ export function WinnerDetailsModal({
   sellerName,
   salePointName,
   onClose,
+  onViewTicket,
 }: Props) {
   const pay = useMarkTicketPaid();
 
@@ -119,7 +131,20 @@ export function WinnerDetailsModal({
                 {formatCurrency(totalPrize)}
               </p>
             </div>
-            <StatusBadge isPaid={isPaid} />
+            <div className="relative z-10 flex items-center gap-2">
+              {onViewTicket && (
+                <button
+                  type="button"
+                  onClick={onViewTicket}
+                  title="Ver detalles completos del ticket"
+                  aria-label="Ver detalles completos del ticket"
+                  className="inline-flex size-8 items-center justify-center rounded-lg bg-white/20 text-white ring-1 ring-inset ring-white/30 transition hover:bg-white/30"
+                >
+                  <ExternalLink className="size-4" strokeWidth={2.4} />
+                </button>
+              )}
+              <StatusBadge isPaid={isPaid} />
+            </div>
           </div>
           <div className="pointer-events-none absolute -right-8 -bottom-8 size-32 rounded-full bg-white/10 blur-2xl" />
         </div>
