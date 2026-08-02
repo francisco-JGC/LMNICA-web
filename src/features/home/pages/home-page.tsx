@@ -3,6 +3,7 @@ import {
   MapPin,
   Receipt,
   Sparkles,
+  TrendingDown,
   TrendingUp,
   UserRound,
 } from 'lucide-react';
@@ -31,7 +32,7 @@ export function HomePage() {
       {error && <HomeError message={error.message} />}
       {data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Facturado hoy"
               value={formatCurrency(data.billedToday)}
@@ -41,11 +42,19 @@ export function HomePage() {
               delta={pctDelta(data.billedToday, data.billedYesterday, 'up')}
             />
             <KpiCard
+              label="Pérdida hoy"
+              value={formatCurrency(data.wonToday)}
+              icon={TrendingDown}
+              tone="rose"
+              hint="Premios ganados hoy"
+              delta={pctDelta(data.wonToday, data.wonYesterday, 'down')}
+            />
+            <KpiCard
               label="Utilidad hoy"
               value={formatCurrency(data.profitToday)}
               icon={TrendingUp}
               tone="indigo"
-              hint="Facturado − Pagado"
+              hint="Facturado − Pérdida"
               delta={pctDelta(data.profitToday, data.profitYesterday, 'up')}
             />
             <KpiCard
@@ -60,7 +69,7 @@ export function HomePage() {
               label="Venta semanal"
               value={formatCurrency(data.weeklyBilled)}
               icon={Sparkles}
-              tone="rose"
+              tone="emerald"
               hint="Últimos 7 días vs anteriores"
               delta={pctDelta(
                 data.weeklyBilled,

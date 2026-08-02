@@ -38,12 +38,15 @@ export interface RankingItem {
 export interface DashboardSummary {
   billedToday: number;
   paidToday: number;
+  /** Premios ganados por tickets vendidos hoy (pagados o no) — "pérdida". */
+  wonToday: number;
   profitToday: number;
   ticketsToday: number;
   averageTicketToday: number;
 
   billedYesterday: number;
   paidYesterday: number;
+  wonYesterday: number;
   profitYesterday: number;
   ticketsYesterday: number;
 
