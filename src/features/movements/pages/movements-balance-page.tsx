@@ -7,6 +7,7 @@ import {
   Handshake,
   MapPin,
   Share2,
+  Sigma,
   TrendingDown,
   TrendingUp,
   User,
@@ -298,10 +299,113 @@ function BranchCards({
   }
   return (
     <CardsScroller>
+      {/* Sumatoria general — SIEMPRE primera. Refleja los mismos stats
+          que un BranchCard, pero sumando todas las sucursales visibles
+          en el rango. */}
+      <BranchSummaryCard rows={rows} showSalary={showSalary} />
       {rows.map((row) => (
         <BranchCard key={row.salePointId} row={row} showSalary={showSalary} />
       ))}
     </CardsScroller>
+  );
+}
+
+function BranchSummaryCard({
+  rows,
+  showSalary,
+}: {
+  rows: MovementsBalanceRow[];
+  showSalary: boolean;
+}) {
+  const totals = useMemo(() => {
+    let billed = 0;
+    let wonPrize = 0;
+    let paidPrize = 0;
+    let deposits = 0;
+    let withdrawals = 0;
+    let expenses = 0;
+    let partnerSalary = 0;
+    let net = 0;
+    for (const r of rows) {
+      billed += r.billed;
+      wonPrize += r.wonPrize;
+      paidPrize += r.paidPrize;
+      deposits += r.deposits;
+      withdrawals += r.withdrawals;
+      expenses += r.expenses;
+      partnerSalary += r.partnerSalary ?? 0;
+      net += r.net;
+    }
+    return {
+      billed,
+      wonPrize,
+      paidPrize,
+      deposits,
+      withdrawals,
+      expenses,
+      partnerSalary,
+      net,
+    };
+  }, [rows]);
+
+  const isPositive = totals.net >= 0;
+
+  return (
+    <article
+      className={cn(
+        'flex min-w-[280px] flex-none snap-start flex-col rounded-2xl border-2 bg-gradient-to-br from-indigo-50/60 to-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] sm:min-w-0 sm:flex-auto',
+        isPositive ? 'border-indigo-300/70' : 'border-rose-300/70',
+      )}
+    >
+      <header className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
+              <Sigma className="size-4" strokeWidth={2.4} />
+            </span>
+            <h3 className="truncate text-sm font-bold text-foreground">
+              Sumatoria general
+            </h3>
+          </div>
+          <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+            {rows.length} sucursal{rows.length === 1 ? '' : 'es'}
+          </div>
+        </div>
+      </header>
+
+      <NetBanner value={totals.net} />
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <Stat label="Facturado" value={totals.billed} tone="emerald" />
+        <Stat
+          label="Premios a pagar"
+          value={totals.wonPrize}
+          tone="rose"
+          hint={
+            totals.wonPrize > totals.paidPrize
+              ? `Pendiente por pagar: ${formatCurrency(totals.wonPrize - totals.paidPrize)}`
+              : totals.paidPrize > 0
+                ? `Ya pagado: ${formatCurrency(totals.paidPrize)}`
+                : undefined
+          }
+        />
+        <Stat label="Depósitos" value={totals.deposits} tone="emerald" />
+        <Stat label="Retiros" value={totals.withdrawals} tone="rose" />
+        <Stat
+          label="Gastos"
+          value={totals.expenses}
+          tone="rose"
+          className={showSalary ? undefined : 'col-span-2'}
+        />
+        {showSalary && (
+          <Stat
+            label="Salarios encargados"
+            value={totals.partnerSalary}
+            tone="indigo"
+          />
+        )}
+      </dl>
+    </article>
   );
 }
 

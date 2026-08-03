@@ -4,6 +4,7 @@ import {
   Loader2,
   MapPin,
   Pencil,
+  Percent,
   Save,
   Settings,
   Trash2,
@@ -38,6 +39,8 @@ interface FormState {
   name: string;
   code: string;
   ownerPartnerId: string;
+  /** String para permitir vacío; se convierte a number|null al guardar. */
+  partnerPaymentPercentage: string;
 }
 
 function stateFromSalePoint(sp: SalePoint): FormState {
@@ -45,6 +48,10 @@ function stateFromSalePoint(sp: SalePoint): FormState {
     name: sp.name,
     code: sp.code,
     ownerPartnerId: sp.ownerPartnerId ?? '',
+    partnerPaymentPercentage:
+      sp.partnerPaymentPercentage === null
+        ? ''
+        : String(sp.partnerPaymentPercentage),
   };
 }
 
@@ -120,10 +127,17 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
     name: form.name.trim(),
     code: form.code.trim(),
   };
+  const pctRaw = form.partnerPaymentPercentage.trim();
+  const pctValid =
+    pctRaw === '' ||
+    (/^\d+$/.test(pctRaw) &&
+      Number(pctRaw) >= 0 &&
+      Number(pctRaw) <= 100);
   const isValid =
     trimmed.name.length > 0 &&
     trimmed.code.length >= 2 &&
-    /^[A-Za-z0-9-]+$/.test(trimmed.code);
+    /^[A-Za-z0-9-]+$/.test(trimmed.code) &&
+    pctValid;
 
   const partners = partnersPage?.items ?? [];
   const partnerName = salePoint.ownerPartnerId
@@ -132,16 +146,17 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
 
   const handleSaveInfo = async () => {
     if (!isValid || savingInfo) return;
-    // El % de pago del encargado ahora vive en el usuario socio
-    // (users.payment_percentage). No lo tocamos desde acá; el valor
-    // legacy en la sucursal queda como está hasta que el operador lo
-    // reconfigure en el modal del socio.
+    const nextPct = pctRaw === '' ? null : Number(pctRaw);
     await mutateSalePoint({
       id: salePoint.id,
       payload: {
         name: trimmed.name !== salePoint.name ? trimmed.name : undefined,
         code: trimmed.code !== salePoint.code ? trimmed.code : undefined,
         ownerPartnerId: diffPartner(form.ownerPartnerId, salePoint.ownerPartnerId),
+        partnerPaymentPercentage:
+          nextPct === salePoint.partnerPaymentPercentage
+            ? undefined
+            : nextPct,
       },
     });
     setEditing(false);
@@ -564,6 +579,16 @@ function InfoGrid({
           <span className="text-muted-foreground/60">Sin encargado</span>
         )}
       </ReadRow>
+      <ReadRow label="% de pago al encargado">
+        {salePoint.partnerPaymentPercentage === null ? (
+          <span className="text-muted-foreground/60">Sin configurar</span>
+        ) : (
+          <span className="inline-flex items-center gap-1 font-semibold">
+            <Percent className="size-3.5 text-indigo-600" />
+            {salePoint.partnerPaymentPercentage}%
+          </span>
+        )}
+      </ReadRow>
       <ReadRow label="Creada">
         {new Intl.DateTimeFormat('es', {
           day: '2-digit',
@@ -630,10 +655,7 @@ function InfoEditForm({
         />
       </Field>
 
-      <Field
-        label="Encargado de sucursal"
-        hint="Vacío = opera el owner. El % de pago del encargado se configura en su usuario socio."
-      >
+      <Field label="Encargado de sucursal" hint="Vacío = opera el owner">
         <Select
           value={form.ownerPartnerId}
           onChange={(v) => onChange('ownerPartnerId', v)}
@@ -644,6 +666,27 @@ function InfoEditForm({
             ...partners.map((p) => ({ value: p.id, label: p.name })),
           ]}
         />
+      </Field>
+
+      <Field
+        label="% de pago al encargado"
+        hint="Entero 0–100. Aplica aunque no haya un socio asignado. Vacío = sin comisión."
+      >
+        <div className="relative">
+          <Percent className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={100}
+            value={form.partnerPaymentPercentage}
+            onChange={(e) =>
+              onChange('partnerPaymentPercentage', e.target.value)
+            }
+            placeholder="ej. 10"
+            className={cn(inputClass, 'pl-9')}
+          />
+        </div>
       </Field>
     </div>
   );

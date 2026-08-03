@@ -100,14 +100,11 @@ export function CreateUserModal({ open, onClose }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || isPending) return;
-    // `paymentPercentage` aplica tanto a vendedor (comisión sobre sus
-    // propias ventas) como a socio (comisión sobre las ventas de la
-    // sucursal que dirige como encargado). `salePointId` sigue siendo
-    // solo para vendedores — un socio se asigna como encargado desde el
-    // modal de la sucursal.
+    // `paymentPercentage` es la comisión del vendedor sobre sus propias
+    // ventas. El socio-encargado NO lleva % acá — el % de las ventas de
+    // la sucursal se configura en el modal de la sucursal (aplica
+    // aunque no haya socio asignado).
     const isSeller = form.role === UserRole.SELLER;
-    const isPartner = form.role === UserRole.PARTNER;
-    const usesPayrollPct = isSeller || isPartner;
     await mutateAsync({
       name: trimmed.name,
       username: trimmed.username,
@@ -117,9 +114,7 @@ export function CreateUserModal({ open, onClose }: Props) {
       address: trimmed.address || undefined,
       nationalId: trimmed.nationalId || undefined,
       paymentPercentage:
-        usesPayrollPct && form.paymentPercentage
-          ? paymentPercentage
-          : undefined,
+        isSeller && form.paymentPercentage ? paymentPercentage : undefined,
       salePointId: isSeller ? form.salePointId || undefined : undefined,
     });
     onClose();
@@ -262,15 +257,10 @@ export function CreateUserModal({ open, onClose }: Props) {
           </Field>
         )}
 
-        {(form.role === UserRole.SELLER ||
-          form.role === UserRole.PARTNER) && (
+        {form.role === UserRole.SELLER && (
           <Field
             label="Porcentaje de pago"
-            hint={
-              form.role === UserRole.PARTNER
-                ? 'Comisión semanal sobre las ventas de la sucursal que dirige como encargado'
-                : 'Comisión semanal sobre el total de ventas del vendedor'
-            }
+            hint="Comisión semanal sobre el total de ventas del vendedor"
           >
             <div className="relative">
               <input

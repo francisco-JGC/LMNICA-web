@@ -106,13 +106,11 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
 
   const handleSave = async () => {
     if (!isValid || isPending) return;
-    // `paymentPercentage` aplica a vendedor (sobre sus propias ventas) y
-    // a socio (sobre las ventas de la sucursal que dirige como encargado).
-    // `salePointId` sigue siendo solo para vendedores — la relación de un
-    // socio con su sucursal se maneja desde el modal de la sucursal.
+    // `paymentPercentage` es solo para vendedores (comisión sobre sus
+    // propias ventas). El % del encargado se configura a nivel sucursal.
+    // Al cambiar de vendedor a otro rol, se nullea para no dejar valores
+    // "colgados" sin significado.
     const isSeller = form.role === UserRole.SELLER;
-    const isPartner = form.role === UserRole.PARTNER;
-    const usesPayrollPct = isSeller || isPartner;
     await mutateAsync({
       id: user.id,
       payload: {
@@ -122,7 +120,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
         phone: diffNullable(trimmed.phone, user.phone),
         address: diffNullable(trimmed.address, user.address),
         nationalId: diffNullable(trimmed.nationalId, user.nationalId),
-        paymentPercentage: usesPayrollPct
+        paymentPercentage: isSeller
           ? diffNullableNumber(form.paymentPercentage, user.paymentPercentage)
           : user.paymentPercentage !== null
             ? null
@@ -483,15 +481,10 @@ function EditForm({
         </div>
       </Field>
 
-      {(form.role === UserRole.SELLER ||
-        form.role === UserRole.PARTNER) && (
+      {form.role === UserRole.SELLER && (
         <Field
           label="Porcentaje de pago"
-          hint={
-            form.role === UserRole.PARTNER
-              ? 'Comisión semanal sobre las ventas de la sucursal que dirige como encargado'
-              : 'Comisión semanal sobre el total de ventas del vendedor'
-          }
+          hint="Comisión semanal sobre el total de ventas del vendedor"
         >
           <div className="relative">
             <input
