@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react';
 import {
+  Calendar,
   CircleDollarSign,
   MapPin,
   Receipt,
@@ -18,15 +20,70 @@ import { PendingPayoutsCard } from '@/features/home/components/pending-payouts-c
 import { TopRankingCard } from '@/features/home/components/top-ranking-card';
 import { useDashboardSummary } from '@/features/home/hooks/use-dashboard-summary';
 import { useSession } from '@/features/auth/hooks/use-session';
+import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
 
+function isoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function isSameDay(a: string, b: string): boolean {
+  return a === b;
+}
+
+function isToday(a: string): boolean {
+  return a === isoDate(new Date());
+}
+
 export function HomePage() {
-  const { data, isLoading, error } = useDashboardSummary();
   const session = useSession();
+
+  const todayIso = isoDate(new Date());
+  const [from, setFrom] = useState<string>(todayIso);
+  const [to, setTo] = useState<string>(todayIso);
+
+  const params = useMemo(
+    () => ({
+      // Managua = UTC-6 fijo. Enviamos ISO con offset explícito para
+      // que el backend interprete correctamente los límites del día
+      // sin depender de la TZ del cliente.
+      from: from ? `${from}T00:00:00-06:00` : undefined,
+      to: to ? `${to}T23:59:59-06:00` : undefined,
+    }),
+    [from, to],
+  );
+
+  const { data, isLoading, error } = useDashboardSummary(params);
+
+  // Etiquetas y hints: si el rango es "hoy", mostramos "hoy"; si es
+  // un rango custom, mostramos el rango. Sub-hint de deltas también
+  // se adapta ("vs ayer" vs "vs período previo").
+  const isOnlyToday = isSameDay(from, to) && isToday(from);
+  const isSingleDay = isSameDay(from, to);
+  const suffix = isOnlyToday
+    ? 'hoy'
+    : isSingleDay
+      ? `del ${formatShortDate(from)}`
+      : `del ${formatShortDate(from)} al ${formatShortDate(to)}`;
+  const deltaHint = isOnlyToday ? 'vs ayer' : 'vs período previo';
 
   return (
     <div className="space-y-6">
       <PageHeader name={session?.user.name ?? ''} />
+
+      <RangeFilter
+        from={from}
+        to={to}
+        onFromChange={setFrom}
+        onToChange={setTo}
+        onResetToday={() => {
+          setFrom(todayIso);
+          setTo(todayIso);
+        }}
+      />
 
       {isLoading && <HomeSkeleton />}
       {error && <HomeError message={error.message} />}
@@ -34,36 +91,36 @@ export function HomePage() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
-              label="Facturado hoy"
-              value={formatCurrency(data.billedToday)}
+              label={`Facturado ${suffix}`}
+              value={formatCurrency(data.billed)}
               icon={CircleDollarSign}
               tone="emerald"
-              hint="vs ayer"
-              delta={pctDelta(data.billedToday, data.billedYesterday, 'up')}
+              hint={deltaHint}
+              delta={pctDelta(data.billed, data.billedPrev, 'up')}
             />
             <KpiCard
-              label="Pérdida hoy"
-              value={formatCurrency(data.wonToday)}
+              label={`Pérdida ${suffix}`}
+              value={formatCurrency(data.won)}
               icon={TrendingDown}
               tone="rose"
-              hint="Premios ganados hoy"
-              delta={pctDelta(data.wonToday, data.wonYesterday, 'down')}
+              hint="Premios ganados en el rango"
+              delta={pctDelta(data.won, data.wonPrev, 'down')}
             />
             <KpiCard
-              label="Utilidad hoy"
-              value={formatCurrency(data.profitToday)}
+              label={`Utilidad ${suffix}`}
+              value={formatCurrency(data.profit)}
               icon={TrendingUp}
               tone="indigo"
               hint="Facturado − Pérdida"
-              delta={pctDelta(data.profitToday, data.profitYesterday, 'up')}
+              delta={pctDelta(data.profit, data.profitPrev, 'up')}
             />
             <KpiCard
-              label="Boletos hoy"
-              value={data.ticketsToday.toLocaleString('es')}
+              label={`Boletos ${suffix}`}
+              value={data.tickets.toLocaleString('es')}
               icon={Receipt}
               tone="amber"
-              hint={`Ticket promedio ${formatCurrency(data.averageTicketToday)}`}
-              delta={pctDelta(data.ticketsToday, data.ticketsYesterday, 'up')}
+              hint={`Ticket promedio ${formatCurrency(data.averageTicket)}`}
+              delta={pctDelta(data.tickets, data.ticketsPrev, 'up')}
             />
             <KpiCard
               label="Venta semanal"
@@ -85,15 +142,15 @@ export function HomePage() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <TopRankingCard
-              title="Top vendedores (hoy)"
-              emptyLabel="Aún no hay ventas hoy."
+              title={`Top vendedores (${suffix})`}
+              emptyLabel="Aún no hay ventas en el rango."
               items={data.topSellers}
               icon={UserRound}
               tone="indigo"
             />
             <TopRankingCard
-              title="Top puntos de venta (hoy)"
-              emptyLabel="Aún no hay ventas hoy."
+              title={`Top puntos de venta (${suffix})`}
+              emptyLabel="Aún no hay ventas en el rango."
               items={data.topSalePoints}
               icon={MapPin}
               tone="emerald"
@@ -142,11 +199,97 @@ function PageHeader({ name }: { name: string }) {
   );
 }
 
+function RangeFilter({
+  from,
+  to,
+  onFromChange,
+  onToChange,
+  onResetToday,
+}: {
+  from: string;
+  to: string;
+  onFromChange: (v: string) => void;
+  onToChange: (v: string) => void;
+  onResetToday: () => void;
+}) {
+  const showReset = !isToday(from) || !isToday(to);
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <Field label="Desde">
+        <DateField value={from} max={to} onChange={onFromChange} />
+      </Field>
+      <Field label="Hasta">
+        <DateField value={to} min={from} onChange={onToChange} />
+      </Field>
+      {showReset && (
+        <button
+          type="button"
+          onClick={onResetToday}
+          className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:bg-secondary"
+        >
+          Hoy
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DateField({
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  value: string;
+  min?: string;
+  max?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <input
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          'w-44 rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
+        )}
+      />
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1.5">
+      <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/** "05/03" — corta para labels de KPI. */
+function formatShortDate(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
 function HomeSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((i) => (
           <div
             key={i}
             className="h-32 animate-pulse rounded-2xl border border-border/70 bg-card"

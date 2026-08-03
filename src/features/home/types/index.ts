@@ -36,20 +36,23 @@ export interface RankingItem {
 }
 
 export interface DashboardSummary {
-  billedToday: number;
-  paidToday: number;
-  /** Premios ganados por tickets vendidos hoy (pagados o no) — "pérdida". */
-  wonToday: number;
-  profitToday: number;
-  ticketsToday: number;
-  averageTicketToday: number;
+  // KPIs del rango solicitado (default = hoy).
+  billed: number;
+  paid: number;
+  /** Premios ganados en el rango (pagados o no) — "pérdida". */
+  won: number;
+  profit: number;
+  tickets: number;
+  averageTicket: number;
 
-  billedYesterday: number;
-  paidYesterday: number;
-  wonYesterday: number;
-  profitYesterday: number;
-  ticketsYesterday: number;
+  // Ventana equivalente inmediata anterior, para deltas.
+  billedPrev: number;
+  paidPrev: number;
+  wonPrev: number;
+  profitPrev: number;
+  ticketsPrev: number;
 
+  // Semanal fijo — no depende del rango.
   weeklyBilled: number;
   weeklyBilledPrev: number;
 
@@ -60,4 +63,11 @@ export interface DashboardSummary {
   pendingPayouts: PendingPayouts;
   topSellers: RankingItem[];
   topSalePoints: RankingItem[];
+}
+
+export interface DashboardSummaryParams {
+  /** ISO 8601 con offset — inicio del rango, inclusivo. */
+  from?: string;
+  /** ISO 8601 con offset — fin del rango, inclusivo. */
+  to?: string;
 }
