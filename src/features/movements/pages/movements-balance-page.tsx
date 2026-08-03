@@ -494,7 +494,7 @@ function BranchCard({
             hint={
               row.ownerPartnerName
                 ? `Para ${row.ownerPartnerName}`
-                : undefined
+                : 'Sin encargado asignado'
             }
           />
         )}
