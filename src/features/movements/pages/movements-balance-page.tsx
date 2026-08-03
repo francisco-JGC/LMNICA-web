@@ -437,9 +437,12 @@ function SellerCard({
   showSalary: boolean;
 }) {
   const cardRef = useRef<HTMLElement>(null);
-  // Ganancia neta del vendedor = ventas - premios que debería entregar
-  // (independiente de los movements, que son a nivel sucursal).
-  const net = row.billed - row.wonPrize;
+  // Ganancia neta del vendedor = ventas − premios que debería entregar
+  // − su propio salario (comisión). El salario es un costo real; se
+  // descuenta aunque el toggle "showSalary" lo esté ocultando en la UI.
+  // Movimientos (depósitos/retiros/gastos) no entran porque son a
+  // nivel sucursal, no del vendedor.
+  const net = row.billed - row.wonPrize - (row.salary ?? 0);
   const isPositive = net >= 0;
   return (
     <article

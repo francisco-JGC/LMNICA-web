@@ -8,6 +8,7 @@ import {
   TrendingDown,
   TrendingUp,
   UserRound,
+  Wallet,
 } from 'lucide-react';
 
 import { GamesBreakdown } from '@/features/home/components/games-breakdown';
@@ -89,7 +90,7 @@ export function HomePage() {
       {error && <HomeError message={error.message} />}
       {data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               label={`Facturado ${suffix}`}
               value={formatCurrency(data.billed)}
@@ -107,11 +108,19 @@ export function HomePage() {
               delta={pctDelta(data.won, data.wonPrev, 'down')}
             />
             <KpiCard
+              label={`Salarios ${suffix}`}
+              value={formatCurrency(data.salaries)}
+              icon={Wallet}
+              tone="amber"
+              hint="Comisiones a vendedores + encargados"
+              delta={pctDelta(data.salaries, data.salariesPrev, 'down')}
+            />
+            <KpiCard
               label={`Utilidad ${suffix}`}
               value={formatCurrency(data.profit)}
               icon={TrendingUp}
               tone="indigo"
-              hint="Facturado − Pérdida"
+              hint="Facturado − Pérdida − Salarios"
               delta={pctDelta(data.profit, data.profitPrev, 'up')}
             />
             <KpiCard
@@ -288,8 +297,8 @@ function formatShortDate(iso: string): string {
 function HomeSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {[0, 1, 2, 3, 4].map((i) => (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
             className="h-32 animate-pulse rounded-2xl border border-border/70 bg-card"

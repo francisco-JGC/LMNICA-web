@@ -41,7 +41,13 @@ export interface DashboardSummary {
   paid: number;
   /** Premios ganados en el rango (pagados o no) — "pérdida". */
   won: number;
+  /** Utilidad real: `billed − won − salaries`. */
   profit: number;
+  /**
+   * Salarios totales del rango: comisiones de vendedores sobre sus
+   * ventas + comisiones de encargados sobre las ventas de sus sucursales.
+   */
+  salaries: number;
   tickets: number;
   averageTicket: number;
 
@@ -50,6 +56,7 @@ export interface DashboardSummary {
   paidPrev: number;
   wonPrev: number;
   profitPrev: number;
+  salariesPrev: number;
   ticketsPrev: number;
 
   // Semanal fijo — no depende del rango.
