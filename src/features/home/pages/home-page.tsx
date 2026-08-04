@@ -8,7 +8,6 @@ import {
   TrendingDown,
   TrendingUp,
   UserRound,
-  Wallet,
 } from 'lucide-react';
 
 import { GamesBreakdown } from '@/features/home/components/games-breakdown';
@@ -106,14 +105,6 @@ export function HomePage() {
               tone="rose"
               hint="Premios ganados en el rango"
               delta={pctDelta(data.won, data.wonPrev, 'down')}
-            />
-            <KpiCard
-              label={`Salarios ${suffix}`}
-              value={formatCurrency(data.salaries)}
-              icon={Wallet}
-              tone="amber"
-              hint="Comisiones a vendedores + encargados"
-              delta={pctDelta(data.salaries, data.salariesPrev, 'down')}
             />
             <KpiCard
               label={`Utilidad ${suffix}`}
