@@ -83,6 +83,7 @@ const NAV_ITEMS: readonly NavItem[] = [
     to: APP_ROUTES.saleLimits,
     label: 'Límites de Venta',
     icon: ShieldAlert,
+    roles: ADMIN_ONLY,
   },
   {
     to: APP_ROUTES.latestResults,

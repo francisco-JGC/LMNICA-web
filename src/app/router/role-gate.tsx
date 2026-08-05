@@ -8,21 +8,35 @@ import type { UserRole } from '@/features/auth/types';
 
 interface Props {
   allow: UserRole[];
+  /**
+   * Ruta a la que redirigir cuando el usuario está autenticado pero no
+   * tiene un rol permitido. Sin este prop se muestra `ForbiddenView`
+   * (el default histórico: pensado para el gate raíz donde el user no
+   * tiene ninguna otra ruta a la que caer).
+   *
+   * Usalo en gates anidados admin-only para partners: tienen sesión
+   * válida y pueden volver a la home; redirigir evita el Forbidden y
+   * es más natural que un dead-end.
+   */
+  redirectTo?: string;
 }
 
 /**
  * Restricts nested routes to users whose role is in `allow`.
  *
- * If the user is authenticated but lacks the role, we render a "no access"
- * screen with a logout button. Redirecting instead would loop the user back
- * to a route they still cannot reach.
+ * Por default, si el user está autenticado pero le falta el rol, se
+ * muestra un "no access" con botón de logout — pensado para el gate
+ * raíz donde no hay otra ruta viable. Para gates anidados (ej.
+ * admin-only dentro de un panel accesible por partners) pasá
+ * `redirectTo` para caer en una ruta válida.
  */
-export function RoleGate({ allow }: Props) {
+export function RoleGate({ allow, redirectTo }: Props) {
   const session = useSession();
   if (!session) {
     return <Navigate to={APP_ROUTES.login} replace />;
   }
   if (!allow.includes(session.user.role)) {
+    if (redirectTo) return <Navigate to={redirectTo} replace />;
     return <ForbiddenView />;
   }
   return <Outlet />;
