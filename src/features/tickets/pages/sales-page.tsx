@@ -159,7 +159,11 @@ export function SalesPage() {
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((t) => t.folio.toLowerCase().includes(q));
+    return items.filter((t) => {
+      if (t.folio.toLowerCase().includes(q)) return true;
+      if ((t.client ?? '').toLowerCase().includes(q)) return true;
+      return false;
+    });
   }, [items, search]);
 
   const stats = useMemo(() => {
@@ -217,7 +221,7 @@ export function SalesPage() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por folio"
+              placeholder="Buscar por folio o cliente"
               className={cn(inputClass, 'pl-9')}
             />
           </div>
@@ -355,6 +359,7 @@ export function SalesPage() {
                 <th className="px-6 py-3">Creado</th>
                 <th className="px-6 py-3">Sucursal</th>
                 <th className="px-6 py-3">Vendedor</th>
+                <th className="px-6 py-3">Cliente</th>
                 <th className="px-6 py-3">Sorteo</th>
                 <th className="px-6 py-3 text-right">Líneas</th>
                 <th className="px-6 py-3 text-right">Total</th>
@@ -367,7 +372,7 @@ export function SalesPage() {
               ) : filteredItems.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-6 py-14 text-center text-sm text-muted-foreground"
                   >
                     {search || status !== 'all' || gameId || salePointId || sellerId
@@ -486,6 +491,13 @@ function TicketRow({
       </td>
       <td className="px-6 py-3.5 text-foreground">{salePointName}</td>
       <td className="px-6 py-3.5 text-muted-foreground">{sellerName}</td>
+      <td className="px-6 py-3.5 text-foreground">
+        {ticket.client && ticket.client.trim().length > 0 ? (
+          ticket.client
+        ) : (
+          <span className="text-muted-foreground/50">—</span>
+        )}
+      </td>
       <td className="px-6 py-3.5">
         <div className="flex flex-col">
           <span className="font-semibold text-foreground">{gameName}</span>
@@ -522,7 +534,7 @@ function StatusBadge({ status }: { status: TicketStatus }) {
 function SkeletonRow() {
   return (
     <tr>
-      {Array.from({ length: 8 }).map((_, i) => (
+      {Array.from({ length: 9 }).map((_, i) => (
         <td key={i} className="px-6 py-4">
           <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
         </td>
