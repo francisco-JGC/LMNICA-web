@@ -266,6 +266,7 @@ export function WinnersPage() {
             setViewingTicket({
               ...selected.ticket,
               drawExecuted: true,
+              wonPrize: selected.totalPrize,
             });
             setSelected(null);
           }}

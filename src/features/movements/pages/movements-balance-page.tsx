@@ -320,7 +320,6 @@ function BranchSummaryCard({
   const totals = useMemo(() => {
     let billed = 0;
     let wonPrize = 0;
-    let paidPrize = 0;
     let deposits = 0;
     let withdrawals = 0;
     let expenses = 0;
@@ -329,7 +328,6 @@ function BranchSummaryCard({
     for (const r of rows) {
       billed += r.billed;
       wonPrize += r.wonPrize;
-      paidPrize += r.paidPrize;
       deposits += r.deposits;
       withdrawals += r.withdrawals;
       expenses += r.expenses;
@@ -339,7 +337,6 @@ function BranchSummaryCard({
     return {
       billed,
       wonPrize,
-      paidPrize,
       deposits,
       withdrawals,
       expenses,
@@ -381,13 +378,6 @@ function BranchSummaryCard({
           label="Premios a pagar"
           value={totals.wonPrize}
           tone="rose"
-          hint={
-            totals.wonPrize > totals.paidPrize
-              ? `Pendiente por pagar: ${formatCurrency(totals.wonPrize - totals.paidPrize)}`
-              : totals.paidPrize > 0
-                ? `Ya pagado: ${formatCurrency(totals.paidPrize)}`
-                : undefined
-          }
         />
         <Stat label="Depósitos" value={totals.deposits} tone="emerald" />
         <Stat label="Retiros" value={totals.withdrawals} tone="rose" />
@@ -470,13 +460,6 @@ function BranchCard({
           label="Premios a pagar"
           value={row.wonPrize}
           tone="rose"
-          hint={
-            row.wonPrize > row.paidPrize
-              ? `Pendiente por pagar: ${formatCurrency(row.wonPrize - row.paidPrize)}`
-              : row.paidPrize > 0
-                ? `Ya pagado: ${formatCurrency(row.paidPrize)}`
-                : undefined
-          }
         />
         <Stat label="Depósitos" value={row.deposits} tone="emerald" />
         <Stat label="Retiros" value={row.withdrawals} tone="rose" />
@@ -590,16 +573,6 @@ function SellerCard({
           label="Premios a pagar"
           value={row.wonPrize}
           tone="rose"
-          hint={
-            row.wonPrize > row.paidPrize
-              ? `Pendiente por pagar: ${formatCurrency(row.wonPrize - row.paidPrize)}`
-              : undefined
-          }
-        />
-        <Stat
-          label="Pagado a ganadores"
-          value={row.paidPrize}
-          tone="neutral"
           className={showSalary ? undefined : 'col-span-2'}
         />
         {showSalary && (
