@@ -9,7 +9,7 @@ import {
 
 import type { GameBreakdownItem } from '@/features/home/types';
 
-type Mode = 'billed' | 'paid';
+type Mode = 'billed' | 'won';
 
 const MODE_STYLE: Record<
   Mode,
@@ -20,8 +20,8 @@ const MODE_STYLE: Record<
     bar: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
     total: 'text-emerald-700',
   },
-  paid: {
-    label: 'Pagado por juegos',
+  won: {
+    label: 'Ganado por clientes',
     bar: 'bg-gradient-to-r from-rose-400 to-rose-600',
     total: 'text-rose-700',
   },
@@ -29,7 +29,7 @@ const MODE_STYLE: Record<
 
 const TABS: readonly SegmentTab<Mode>[] = [
   { key: 'billed', label: 'Facturado por Juegos', tone: 'emerald' },
-  { key: 'paid', label: 'Pagado por Juegos', tone: 'rose' },
+  { key: 'won', label: 'Ganado por clientes', tone: 'rose' },
 ] as const;
 
 interface Props {
@@ -41,14 +41,14 @@ export function GamesBreakdown({ items }: Props) {
 
   const { total, rows } = useMemo(() => {
     const total = items.reduce(
-      (sum, item) => sum + (mode === 'billed' ? item.billed : item.paid),
+      (sum, item) => sum + (mode === 'billed' ? item.billed : item.won),
       0,
     );
     const rows = items
       .map((item) => ({
         gameId: item.gameId,
         gameName: item.gameName,
-        value: mode === 'billed' ? item.billed : item.paid,
+        value: mode === 'billed' ? item.billed : item.won,
       }))
       // Show most relevant first, but keep zero rows so admin sees full catalog.
       .sort((a, b) => b.value - a.value);

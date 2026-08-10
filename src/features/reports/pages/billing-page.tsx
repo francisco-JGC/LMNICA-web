@@ -67,16 +67,16 @@ export function BillingPage() {
 
   const totals = useMemo(() => {
     let billed = 0;
-    let paidPrize = 0;
+    let wonPrize = 0;
     let net = 0;
     let ticketCount = 0;
     for (const r of items) {
       billed += r.billed;
-      paidPrize += r.paidPrize;
+      wonPrize += r.wonPrize;
       net += r.net;
       ticketCount += r.ticketCount;
     }
-    return { billed, paidPrize, net, ticketCount };
+    return { billed, wonPrize, net, ticketCount };
   }, [items]);
 
   return (
@@ -171,9 +171,8 @@ export function BillingPage() {
                 <th className="px-6 py-3">Juego</th>
                 <th className="px-6 py-3 text-right">Tickets</th>
                 <th className="px-6 py-3 text-right">Anulados</th>
-                <th className="px-6 py-3 text-right">Pagados</th>
                 <th className="px-6 py-3 text-right">Facturado</th>
-                <th className="px-6 py-3 text-right">Premios pagados</th>
+                <th className="px-6 py-3 text-right">Ganado por clientes</th>
                 <th className="px-6 py-3 text-right">Neto</th>
                 <th className="px-6 py-3 text-right">% del total</th>
               </tr>
@@ -184,7 +183,7 @@ export function BillingPage() {
               ) : items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={7}
                     className="px-6 py-14 text-center text-sm text-muted-foreground"
                   >
                     Sin ventas en este rango.
@@ -204,12 +203,11 @@ export function BillingPage() {
                     {totals.ticketCount}
                   </td>
                   <td className="px-6 py-3.5" />
-                  <td className="px-6 py-3.5" />
                   <td className="px-6 py-3.5 text-right tabular-nums text-emerald-700">
                     {formatCurrency(totals.billed)}
                   </td>
                   <td className="px-6 py-3.5 text-right tabular-nums text-rose-700">
-                    {formatCurrency(totals.paidPrize)}
+                    {formatCurrency(totals.wonPrize)}
                   </td>
                   <td
                     className={cn(
@@ -251,14 +249,11 @@ function GameRow({ row }: { row: BillingByGameRow }) {
       <td className="px-6 py-3.5 text-right tabular-nums text-muted-foreground">
         {row.voidedCount || <Empty />}
       </td>
-      <td className="px-6 py-3.5 text-right tabular-nums text-muted-foreground">
-        {row.paidCount || <Empty />}
-      </td>
       <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-emerald-700">
         {formatCurrency(row.billed)}
       </td>
       <td className="px-6 py-3.5 text-right tabular-nums text-rose-700">
-        {row.paidPrize > 0 ? formatCurrency(row.paidPrize) : <Empty />}
+        {row.wonPrize > 0 ? formatCurrency(row.wonPrize) : <Empty />}
       </td>
       <td
         className={cn(
@@ -278,7 +273,7 @@ function GameRow({ row }: { row: BillingByGameRow }) {
 function SkeletonRow() {
   return (
     <tr>
-      {Array.from({ length: 8 }).map((_, i) => (
+      {Array.from({ length: 7 }).map((_, i) => (
         <td key={i} className="px-6 py-4">
           <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
         </td>

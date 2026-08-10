@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Calendar,
-  Check,
   Dices,
   MapPin,
   Search,
@@ -17,10 +16,6 @@ import { WinnerDetailsModal } from '@/features/winners/components/winner-details
 import { useWinners } from '@/features/winners/hooks/use-winners';
 import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
-import {
-  SegmentedControl,
-  type SegmentTab,
-} from '@/shared/ui/segmented-control';
 import { Select } from '@/shared/ui/select';
 
 import type { Game } from '@/features/games/types';
@@ -29,14 +24,6 @@ import type { Ticket } from '@/features/tickets/types';
 import { UserRole } from '@/features/users/types';
 import type { User } from '@/features/users/types';
 import type { WinningTicket } from '@/features/winners/types';
-
-type StatusFilter = 'all' | 'pending' | 'paid';
-
-const STATUS_TABS: readonly SegmentTab<StatusFilter>[] = [
-  { key: 'all', label: 'Todos' },
-  { key: 'pending', label: 'Pendientes', tone: 'amber' },
-  { key: 'paid', label: 'Pagados', tone: 'emerald' },
-] as const;
 
 function isoDate(d: Date): string {
   const y = d.getFullYear();
@@ -55,7 +42,6 @@ export function WinnersPage() {
   const [gameId, setGameId] = useState<string>('');
   const [salePointId, setSalePointId] = useState<string>('');
   const [sellerId, setSellerId] = useState<string>('');
-  const [status, setStatus] = useState<StatusFilter>('pending');
   const [from, setFrom] = useState<string>(daysAgoIso(30));
   const [to, setTo] = useState<string>(isoDate(new Date()));
   const [search, setSearch] = useState('');
@@ -108,30 +94,21 @@ export function WinnersPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return winners.filter((w) => {
-      if (status === 'pending' && w.ticket.paidAt !== null) return false;
-      if (status === 'paid' && w.ticket.paidAt === null) return false;
       if (!q) return true;
       const folioMatch = w.ticket.folio.toLowerCase().includes(q);
       const clientMatch = (w.ticket.client ?? '').toLowerCase().includes(q);
       return folioMatch || clientMatch;
     });
-  }, [winners, status, search]);
+  }, [winners, search]);
 
   const stats = useMemo(() => {
-    let pendingCount = 0;
-    let pendingAmount = 0;
-    let paidCount = 0;
-    let paidAmount = 0;
+    let count = 0;
+    let amount = 0;
     for (const w of winners) {
-      if (w.ticket.paidAt === null) {
-        pendingCount += 1;
-        pendingAmount += w.totalPrize;
-      } else {
-        paidCount += 1;
-        paidAmount += w.totalPrize;
-      }
+      count += 1;
+      amount += w.totalPrize;
     }
-    return { pendingCount, pendingAmount, paidCount, paidAmount };
+    return { count, amount };
   }, [winners]);
 
   return (
@@ -143,29 +120,17 @@ export function WinnersPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4">
         <StatCard
           tone="amber"
-          label="Pendientes de pagar"
-          count={stats.pendingCount}
-          amount={stats.pendingAmount}
-        />
-        <StatCard
-          tone="emerald"
-          label="Pagados"
-          count={stats.paidCount}
-          amount={stats.paidAmount}
+          label="Total ganado por clientes"
+          count={stats.count}
+          amount={stats.amount}
         />
       </div>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap items-center gap-3">
-          <SegmentedControl
-            ariaLabel="Filtrar por estado"
-            tabs={STATUS_TABS}
-            value={status}
-            onChange={setStatus}
-          />
           <div className="relative min-w-56 flex-1 max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -337,7 +302,6 @@ function WinnerCard({
   onClick: () => void;
 }) {
   const { ticket, totalPrize } = winner;
-  const isPaid = ticket.paidAt !== null;
   const drawAt = new Intl.DateTimeFormat('es', {
     day: '2-digit',
     month: 'short',
@@ -351,10 +315,7 @@ function WinnerCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative flex flex-col gap-3 overflow-hidden rounded-2xl border p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition',
-        isPaid
-          ? 'border-border bg-card hover:shadow-[0_10px_24px_-14px_rgba(15,23,42,0.18)]'
-          : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50',
+        'group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-amber-500/50',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -364,16 +325,6 @@ function WinnerCard({
           </p>
           <p className="text-xs text-muted-foreground">{drawAt}</p>
         </div>
-        {isPaid ? (
-          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-500/20">
-            <Check className="size-3" strokeWidth={2.6} />
-            Pagado
-          </span>
-        ) : (
-          <span className="inline-flex items-center rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-500/25">
-            Pendiente
-          </span>
-        )}
       </div>
 
       <div className="flex items-end justify-between gap-3">
@@ -381,12 +332,7 @@ function WinnerCard({
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Premio
           </p>
-          <p
-            className={cn(
-              'text-2xl font-black tabular-nums',
-              isPaid ? 'text-foreground' : 'text-amber-800',
-            )}
-          >
+          <p className="text-2xl font-black tabular-nums text-amber-800">
             {formatCurrency(totalPrize)}
           </p>
         </div>

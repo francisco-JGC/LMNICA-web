@@ -1,13 +1,5 @@
-import {
-  Check,
-  ExternalLink,
-  Loader2,
-  Ticket as TicketIcon,
-  Trophy,
-} from 'lucide-react';
+import { ExternalLink, Trophy } from 'lucide-react';
 
-import { useMarkTicketPaid } from '@/features/winners/hooks/use-winners';
-import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
 import { Modal } from '@/shared/ui/modal';
 
@@ -34,12 +26,9 @@ export function WinnerDetailsModal({
   onClose,
   onViewTicket,
 }: Props) {
-  const pay = useMarkTicketPaid();
-
   if (!winner) return null;
 
   const { ticket, totalPrize, lines } = winner;
-  const isPaid = ticket.paidAt !== null;
 
   const drawAt = new Intl.DateTimeFormat('es', {
     day: '2-digit',
@@ -49,16 +38,6 @@ export function WinnerDetailsModal({
     minute: '2-digit',
     hour12: true,
   }).format(new Date(ticket.drawAt));
-
-  const paidAt = isPaid
-    ? new Intl.DateTimeFormat('es', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      }).format(new Date(ticket.paidAt!))
-    : null;
 
   const winningLines = lines.filter((l) => l.isWinner);
 
@@ -70,52 +49,13 @@ export function WinnerDetailsModal({
       description={`${gameName ?? 'Juego'} · ${drawAt}`}
       size="max-w-2xl"
       footer={
-        isPaid ? (
-          <>
-            <span className="mr-auto inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
-              <Check className="size-4" strokeWidth={2.6} />
-              Pagado {paidAt && `· ${paidAt}`}
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-            >
-              Cerrar
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              disabled={pay.isPending}
-              onClick={async () => {
-                await pay.mutateAsync(ticket.id);
-                onClose();
-              }}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition',
-                pay.isPending
-                  ? 'cursor-not-allowed opacity-70'
-                  : 'hover:bg-emerald-700',
-              )}
-            >
-              {pay.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Check className="size-4" strokeWidth={2.6} />
-              )}
-              Marcar como pagado
-            </button>
-          </>
-        )
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+        >
+          Cerrar
+        </button>
       }
     >
       <div className="space-y-5">
@@ -131,8 +71,8 @@ export function WinnerDetailsModal({
                 {formatCurrency(totalPrize)}
               </p>
             </div>
-            <div className="relative z-10 flex items-center gap-2">
-              {onViewTicket && (
+            {onViewTicket && (
+              <div className="relative z-10 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={onViewTicket}
@@ -142,9 +82,8 @@ export function WinnerDetailsModal({
                 >
                   <ExternalLink className="size-4" strokeWidth={2.4} />
                 </button>
-              )}
-              <StatusBadge isPaid={isPaid} />
-            </div>
+              </div>
+            )}
           </div>
           <div className="pointer-events-none absolute -right-8 -bottom-8 size-32 rounded-full bg-white/10 blur-2xl" />
         </div>
@@ -205,12 +144,6 @@ export function WinnerDetailsModal({
             </table>
           </div>
         </section>
-
-        {pay.error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {pay.error.message}
-          </div>
-        )}
       </div>
     </Modal>
   );
@@ -226,19 +159,5 @@ function MetaRow({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
-  );
-}
-
-function StatusBadge({ isPaid }: { isPaid: boolean }) {
-  return isPaid ? (
-    <span className="inline-flex items-center gap-1 rounded-lg bg-white/25 px-2.5 py-1 text-xs font-black text-white ring-1 ring-inset ring-white/30">
-      <Check className="size-3" strokeWidth={2.8} />
-      Pagado
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-lg bg-white/30 px-2.5 py-1 text-xs font-black text-white ring-1 ring-inset ring-white/40">
-      <TicketIcon className="size-3" strokeWidth={2.8} />
-      Pendiente
-    </span>
   );
 }

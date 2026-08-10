@@ -16,7 +16,7 @@ import {
   type KpiDelta,
 } from '@/features/home/components/kpi-card';
 import { MonthlyChart } from '@/features/home/components/monthly-chart';
-import { PendingPayoutsCard } from '@/features/home/components/pending-payouts-card';
+import { RecentWinnersCard } from '@/features/home/components/recent-winners-card';
 import { TopRankingCard } from '@/features/home/components/top-ranking-card';
 import { useDashboardSummary } from '@/features/home/hooks/use-dashboard-summary';
 import { useSession } from '@/features/auth/hooks/use-session';
@@ -157,7 +157,7 @@ export function HomePage() {
             />
           </div>
 
-          <PendingPayoutsCard data={data.pendingPayouts} />
+          <RecentWinnersCard data={data.recentWinners} />
         </>
       )}
     </div>

@@ -25,9 +25,8 @@ export interface Ticket {
   drawAt: string;
   cutoffMinutes: number;
   drawExecuted: boolean;
-  paidAt: string | null;
-  paidById: string | null;
-  paidPrize: number;
+  /** Premio ganado (evaluado contra draw_result). 0 si no ganó o si el sorteo aún no se ejecutó. */
+  wonPrize: number;
   lines: TicketLine[];
   createdAt: string;
   updatedAt: string;

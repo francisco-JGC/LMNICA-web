@@ -18,7 +18,7 @@ import {
 
 import type { MonthlySeriesPoint } from '@/features/home/types';
 
-type Series = 'billed' | 'paid' | 'both';
+type Series = 'billed' | 'won' | 'both';
 
 interface SeriesStyle {
   label: string;
@@ -36,17 +36,17 @@ const BILLED: SeriesStyle = {
   dot: 'bg-emerald-500',
 };
 
-const PAID: SeriesStyle = {
-  label: 'Pagado',
+const WON: SeriesStyle = {
+  label: 'Ganado por clientes',
   stroke: '#e11d48',
-  gradientId: 'fill-paid',
+  gradientId: 'fill-won',
   badge: 'bg-rose-500/10 text-rose-700 ring-rose-500/20',
   dot: 'bg-rose-500',
 };
 
 const TABS: readonly SegmentTab<Series>[] = [
   { key: 'billed', label: 'Facturado', tone: 'emerald' },
-  { key: 'paid', label: 'Pagado', tone: 'rose' },
+  { key: 'won', label: 'Ganado', tone: 'rose' },
   { key: 'both', label: 'Ambos' },
 ] as const;
 
@@ -55,12 +55,12 @@ export function MonthlyChart({ data }: { data: MonthlySeriesPoint[] }) {
 
   const totals = useMemo(() => {
     let billed = 0;
-    let paid = 0;
+    let won = 0;
     for (const point of data) {
       billed += point.billed;
-      paid += point.paid;
+      won += point.won;
     }
-    return { billed, paid };
+    return { billed, won };
   }, [data]);
 
   return (
@@ -92,9 +92,9 @@ export function MonthlyChart({ data }: { data: MonthlySeriesPoint[] }) {
                 <stop offset="0%" stopColor={BILLED.stroke} stopOpacity={0.32} />
                 <stop offset="100%" stopColor={BILLED.stroke} stopOpacity={0} />
               </linearGradient>
-              <linearGradient id={PAID.gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={PAID.stroke} stopOpacity={0.28} />
-                <stop offset="100%" stopColor={PAID.stroke} stopOpacity={0} />
+              <linearGradient id={WON.gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={WON.stroke} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={WON.stroke} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="#eef2f7" vertical={false} />
@@ -130,7 +130,7 @@ export function MonthlyChart({ data }: { data: MonthlySeriesPoint[] }) {
               labelStyle={{ fontWeight: 700, color: '#0f172a' }}
               formatter={(value, name) => [
                 formatCurrency(Number(value ?? 0)),
-                name === 'billed' ? BILLED.label : PAID.label,
+                name === 'billed' ? BILLED.label : WON.label,
               ]}
             />
             {(series === 'billed' || series === 'both') && (
@@ -150,17 +150,17 @@ export function MonthlyChart({ data }: { data: MonthlySeriesPoint[] }) {
                 activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
               />
             )}
-            {(series === 'paid' || series === 'both') && (
+            {(series === 'won' || series === 'both') && (
               <Area
                 type="monotone"
-                dataKey="paid"
-                name="paid"
-                stroke={PAID.stroke}
+                dataKey="won"
+                name="won"
+                stroke={WON.stroke}
                 strokeWidth={2.5}
-                fill={`url(#${PAID.gradientId})`}
+                fill={`url(#${WON.gradientId})`}
                 dot={{
                   r: 3,
-                  stroke: PAID.stroke,
+                  stroke: WON.stroke,
                   fill: '#fff',
                   strokeWidth: 2,
                 }}
@@ -174,7 +174,7 @@ export function MonthlyChart({ data }: { data: MonthlySeriesPoint[] }) {
       {series === 'both' && (
         <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border/70 pt-4">
           <LegendDot color={BILLED.dot} label={BILLED.label} />
-          <LegendDot color={PAID.dot} label={PAID.label} />
+          <LegendDot color={WON.dot} label={WON.label} />
         </div>
       )}
     </section>
@@ -186,14 +186,14 @@ function SummaryLine({
   totals,
 }: {
   series: Series;
-  totals: { billed: number; paid: number };
+  totals: { billed: number; won: number };
 }) {
   if (series === 'both') {
-    const net = totals.billed - totals.paid;
+    const net = totals.billed - totals.won;
     return (
       <div className="mt-1.5 flex flex-wrap items-baseline gap-3">
         <TotalChip label={BILLED.label} value={totals.billed} style={BILLED} />
-        <TotalChip label={PAID.label} value={totals.paid} style={PAID} />
+        <TotalChip label={WON.label} value={totals.won} style={WON} />
         <span className="text-xs text-muted-foreground">
           Neto:{' '}
           <span className="font-semibold text-foreground">
@@ -203,8 +203,8 @@ function SummaryLine({
       </div>
     );
   }
-  const style = series === 'billed' ? BILLED : PAID;
-  const value = series === 'billed' ? totals.billed : totals.paid;
+  const style = series === 'billed' ? BILLED : WON;
+  const value = series === 'billed' ? totals.billed : totals.won;
   return (
     <div className="mt-1.5 flex items-baseline gap-2">
       <span className="text-2xl font-black tracking-tight">

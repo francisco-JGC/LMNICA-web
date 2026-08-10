@@ -2,7 +2,6 @@ import { http } from '@/shared/api/http';
 
 import type {
   ListWinnersParams,
-  Ticket,
   WinningTicket,
 } from '@/features/winners/types';
 
@@ -18,10 +17,5 @@ export async function listWinningTickets(
       to: params.to || undefined,
     },
   });
-  return data;
-}
-
-export async function markTicketPaid(ticketId: string): Promise<Ticket> {
-  const { data } = await http.post<Ticket>(`/tickets/${ticketId}/pay`);
   return data;
 }

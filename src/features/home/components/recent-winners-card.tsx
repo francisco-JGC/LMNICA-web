@@ -1,20 +1,20 @@
-import { AlertCircle, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { APP_ROUTES } from '@/shared/constants/routes';
 import { formatCurrency } from '@/shared/lib/format';
 
 import type {
-  PendingPayoutPreview,
-  PendingPayouts,
+  RecentWinnerPreview,
+  RecentWinners,
 } from '@/features/home/types';
 
 interface Props {
-  data: PendingPayouts;
+  data: RecentWinners;
 }
 
-export function PendingPayoutsCard({ data }: Props) {
-  const hasPending = data.count > 0;
+export function RecentWinnersCard({ data }: Props) {
+  const hasWinners = data.count > 0;
 
   return (
     <section className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -23,39 +23,39 @@ export function PendingPayoutsCard({ data }: Props) {
           <div className="flex items-center gap-2 text-muted-foreground">
             <Trophy className="size-4" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em]">
-              Ganadores pendientes
+              Ganadores recientes
             </p>
           </div>
           <p className="mt-3 text-3xl font-black leading-none tracking-tight">
             {formatCurrency(data.totalAmount)}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {hasPending ? (
+            {hasWinners ? (
               <>
                 <span className="font-semibold text-foreground">
                   {data.count}
                 </span>{' '}
-                {data.count === 1 ? 'boleto' : 'boletos'} sin cobrar
+                {data.count === 1 ? 'boleto ganador' : 'boletos ganadores'} en los últimos 30 días
               </>
             ) : (
-              'Todos los premios están al día'
+              'Sin ganadores en los últimos 30 días'
             )}
           </p>
         </div>
         <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/12 ring-1 ring-inset ring-amber-500/20">
-          <AlertCircle className="size-5 text-amber-600" strokeWidth={2.4} />
+          <Trophy className="size-5 text-amber-600" strokeWidth={2.4} />
         </div>
       </div>
 
-      {hasPending && data.items.length > 0 && (
+      {hasWinners && data.items.length > 0 && (
         <ul className="relative z-10 mt-5 space-y-1.5">
           {data.items.map((item) => (
-            <PendingRow key={item.ticketId} item={item} />
+            <WinnerRow key={item.ticketId} item={item} />
           ))}
         </ul>
       )}
 
-      {hasPending && (
+      {hasWinners && (
         <Link
           to={APP_ROUTES.winners}
           className="relative z-10 mt-4 inline-flex items-center gap-1 self-start text-sm font-semibold text-amber-700 hover:text-amber-800"
@@ -70,7 +70,7 @@ export function PendingPayoutsCard({ data }: Props) {
   );
 }
 
-function PendingRow({ item }: { item: PendingPayoutPreview }) {
+function WinnerRow({ item }: { item: RecentWinnerPreview }) {
   const time = new Intl.DateTimeFormat('es', {
     day: '2-digit',
     month: 'short',

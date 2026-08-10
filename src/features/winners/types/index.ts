@@ -22,9 +22,6 @@ export interface Ticket {
   count: number;
   drawAt: string;
   cutoffMinutes: number;
-  paidAt: string | null;
-  paidById: string | null;
-  paidPrize: number;
   lines: TicketLine[];
   createdAt: string;
   updatedAt: string;

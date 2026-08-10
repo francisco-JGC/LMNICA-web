@@ -37,10 +37,8 @@ export interface MovementsBalanceRow {
    */
   partnerSalary: number | null;
   billed: number;
-  /** Ya pagado (informacional). */
-  paidPrize: number;
   /**
-   * Total ganado por los tickets del rango, esté pagado o no.
+   * Total ganado por los tickets del rango (evaluado contra draws).
    * "Lo que debería entregar" en la UI. Usado en el cálculo de `net`.
    */
   wonPrize: number;

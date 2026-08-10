@@ -5,14 +5,8 @@ export interface SellerReportRow {
   sellerPhone: string | null;
   ticketCount: number;
   voidedCount: number;
-  paidCount: number;
   billed: number;
-  /** Ya pagado (informacional). */
-  paidPrize: number;
-  /**
-   * Total ganado por los tickets del vendedor esté pagado o no.
-   * "Lo que debería entregar" en la UI.
-   */
+  /** Total ganado por los tickets del vendedor (evaluado contra draws). */
   wonPrize: number;
   paymentPercentage: number | null;
   /** `billed × paymentPercentage / 100` rounded — null when % not set. */
@@ -39,10 +33,10 @@ export interface BranchTotalsRow {
   ownerPartnerName: string | null;
   ticketCount: number;
   voidedCount: number;
-  paidCount: number;
   billed: number;
-  paidPrize: number;
-  /** `billed - paidPrize` — revenue after payouts. Can be negative. */
+  /** Total premios ganados en el rango (evaluado contra draws). */
+  wonPrize: number;
+  /** `billed - wonPrize` — revenue after prize obligations. Can be negative. */
   net: number;
 }
 
@@ -61,9 +55,9 @@ export interface BillingByGameRow {
   gameName: string;
   ticketCount: number;
   voidedCount: number;
-  paidCount: number;
   billed: number;
-  paidPrize: number;
+  /** Total ganado por tickets del juego (evaluado contra draws). */
+  wonPrize: number;
   net: number;
   /** 0..1 — `billed / totalBilled`. */
   share: number;

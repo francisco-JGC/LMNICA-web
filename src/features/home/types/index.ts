@@ -2,17 +2,17 @@ export interface MonthlySeriesPoint {
   monthStart: string;
   label: string;
   billed: number;
-  paid: number;
+  won: number;
 }
 
 export interface GameBreakdownItem {
   gameId: string;
   gameName: string;
   billed: number;
-  paid: number;
+  won: number;
 }
 
-export interface PendingPayoutPreview {
+export interface RecentWinnerPreview {
   ticketId: string;
   folio: string;
   gameId: string;
@@ -22,10 +22,10 @@ export interface PendingPayoutPreview {
   client: string | null;
 }
 
-export interface PendingPayouts {
+export interface RecentWinners {
   count: number;
   totalAmount: number;
-  items: PendingPayoutPreview[];
+  items: RecentWinnerPreview[];
 }
 
 export interface RankingItem {
@@ -38,14 +38,13 @@ export interface RankingItem {
 export interface DashboardSummary {
   // KPIs del rango solicitado (default = hoy).
   billed: number;
-  paid: number;
-  /** Premios ganados en el rango (pagados o no) — "pérdida". */
+  /** Premios ganados en el rango — "pérdida". */
   won: number;
   /** Utilidad real: `billed − won − salaries`. */
   profit: number;
   /**
-   * Salarios totales del rango: comisiones de vendedores sobre sus
-   * ventas + comisiones de encargados sobre las ventas de sus sucursales.
+   * Salarios totales del rango: comisiones de encargados sobre las
+   * ventas de sus sucursales.
    */
   salaries: number;
   tickets: number;
@@ -53,7 +52,6 @@ export interface DashboardSummary {
 
   // Ventana equivalente inmediata anterior, para deltas.
   billedPrev: number;
-  paidPrev: number;
   wonPrev: number;
   profitPrev: number;
   salariesPrev: number;
@@ -67,7 +65,12 @@ export interface DashboardSummary {
 
   monthlySeries: MonthlySeriesPoint[];
   byGame: GameBreakdownItem[];
-  pendingPayouts: PendingPayouts;
+  /**
+   * Ganadores recientes de los últimos 30 días (no filtrados por el rango
+   * del dashboard). Antes se llamaba `pendingPayouts` y solo mostraba
+   * unpaid — el concepto de "pagado" fue eliminado del sistema.
+   */
+  recentWinners: RecentWinners;
   topSellers: RankingItem[];
   topSalePoints: RankingItem[];
 }
