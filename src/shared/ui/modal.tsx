@@ -56,9 +56,18 @@ export function Modal({
         onClick={onClose}
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-[1px]"
       />
+      {/*
+        Panel SIN `overflow-hidden`: los dropdowns/tooltips que hijos
+        posicionan `absolute` (ej. el <Select> custom) deben poder
+        salirse de los límites del panel; si lo clipamos, la lista se
+        recorta a la altura visible del modal. Como contrapartida:
+          - header hereda `bg-card` del panel, no necesita redondeo.
+          - footer tiene bg propio, por eso agregamos `rounded-b-2xl`
+            para que sus esquinas inferiores coincidan con las del panel.
+      */}
       <div
         className={cn(
-          'relative z-10 mt-6 w-full overflow-hidden rounded-2xl bg-card shadow-[0_24px_64px_-24px_rgba(15,23,42,0.35)] ring-1 ring-black/5',
+          'relative z-10 mt-6 w-full rounded-2xl bg-card shadow-[0_24px_64px_-24px_rgba(15,23,42,0.35)] ring-1 ring-black/5',
           size,
         )}
       >
@@ -89,7 +98,7 @@ export function Modal({
         <div className="px-6 py-5">{children}</div>
 
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-border bg-slate-50/60 px-6 py-3">
+          <footer className="flex items-center justify-end gap-2 rounded-b-2xl border-t border-border bg-slate-50/60 px-6 py-3">
             {footer}
           </footer>
         )}
