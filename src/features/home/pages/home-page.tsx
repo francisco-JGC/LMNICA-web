@@ -111,7 +111,7 @@ export function HomePage() {
               value={formatCurrency(data.profit)}
               icon={TrendingUp}
               tone="indigo"
-              hint="Facturado − Pérdida − Salarios"
+              hint="Facturado − Pérdida − Salarios + Depósitos − Retiros − Gastos"
               delta={pctDelta(data.profit, data.profitPrev, 'up')}
             />
             <KpiCard

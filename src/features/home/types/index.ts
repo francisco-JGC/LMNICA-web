@@ -40,13 +40,22 @@ export interface DashboardSummary {
   billed: number;
   /** Premios ganados en el rango — "pérdida". */
   won: number;
-  /** Utilidad real: `billed − won − salaries`. */
+  /**
+   * Utilidad real, misma fórmula que "Restante neto" del Cálculo de
+   * movimiento: `billed − won − salaries + deposits − withdrawals − expenses`.
+   */
   profit: number;
   /**
    * Salarios totales del rango: comisiones de encargados sobre las
    * ventas de sus sucursales.
    */
   salaries: number;
+  /** Depósitos manuales registrados en el rango. */
+  deposits: number;
+  /** Retiros manuales registrados en el rango. */
+  withdrawals: number;
+  /** Gastos manuales registrados en el rango. */
+  expenses: number;
   tickets: number;
   averageTicket: number;
 
@@ -55,6 +64,9 @@ export interface DashboardSummary {
   wonPrev: number;
   profitPrev: number;
   salariesPrev: number;
+  depositsPrev: number;
+  withdrawalsPrev: number;
+  expensesPrev: number;
   ticketsPrev: number;
 
   // Semanal fijo — no depende del rango.
