@@ -37,12 +37,12 @@ function isoDate(d: Date): string {
  * Cálculo de movimientos rediseñado a **cards**. Dos modos:
  *
  * - **Sin vendedor seleccionado** → un card por sucursal con billed,
- *   premios adeudados (wonPrize), premios ya pagados, movements, el
- *   salario del encargado según % configurado en la sucursal, y el
- *   `net` grande resaltado en verde/rojo.
+ *   premios ganados por clientes (wonPrize, evaluado contra los sorteos
+ *   que ya cayeron), movements, el salario del encargado según % configurado
+ *   en la sucursal, y el `net` grande resaltado en verde/rojo.
  * - **Con vendedor seleccionado** → un card por vendedor con lo que
- *   vendió, pagó, debería pagar (wonPrize), su salario según % (con
- *   checkbox para ocultar), y el net del vendedor.
+ *   vendió, premios ganados por sus clientes (wonPrize), su salario según %
+ *   (con checkbox para ocultar), y el net del vendedor.
  *
  * En móvil los cards hacen scroll horizontal (flex-nowrap + overflow-x)
  * para revisar sucursal por sucursal sin abrir una vista distinta.
@@ -91,8 +91,8 @@ export function MovementsBalancePage() {
         </div>
         <p className="max-w-md text-xs text-muted-foreground">
           El <span className="font-semibold">restante</span> descuenta los
-          premios ganadores del rango, estén pagados o no — la ganancia real
-          esperada aunque los boletos ganadores aún no se hayan cobrado.
+          premios de boletos ganadores en el rango, según los sorteos que ya
+          cayeron. Los boletos con sorteos pendientes no cuentan.
         </p>
       </header>
 
@@ -375,7 +375,7 @@ function BranchSummaryCard({
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <Stat label="Facturado" value={totals.billed} tone="emerald" />
         <Stat
-          label="Premios a pagar"
+          label="Premios ganados"
           value={totals.wonPrize}
           tone="rose"
         />
@@ -457,7 +457,7 @@ function BranchCard({
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <Stat label="Facturado" value={row.billed} tone="emerald" />
         <Stat
-          label="Premios a pagar"
+          label="Premios ganados"
           value={row.wonPrize}
           tone="rose"
         />
@@ -570,7 +570,7 @@ function SellerCard({
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <Stat label="Vendido" value={row.billed} tone="emerald" />
         <Stat
-          label="Premios a pagar"
+          label="Premios ganados"
           value={row.wonPrize}
           tone="rose"
           className={showSalary ? undefined : 'col-span-2'}
