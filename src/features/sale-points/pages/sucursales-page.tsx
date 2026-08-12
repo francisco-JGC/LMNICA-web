@@ -146,9 +146,9 @@ export function SucursalesPage() {
                 <th className="px-6 py-3">Código</th>
                 {isAdmin && <th className="px-6 py-3">Encargado</th>}
                 <th className="px-6 py-3 text-right">Acceso</th>
-                {isAdmin && (
-                  <th className="w-12 px-2 py-3" aria-label="Configuración" />
-                )}
+                <th className="w-12 px-2 py-3" aria-label="Configuración" />
+                {/* Config link disponible para admin (todas las secciones)
+                    y partner (solo la sección de cuotas por vendedor). */}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -159,7 +159,7 @@ export function SucursalesPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={isAdmin ? 5 : 3}
+                    colSpan={isAdmin ? 5 : 4}
                     className="px-6 py-14 text-center text-sm text-muted-foreground"
                   >
                     {search || filter !== 'all'
@@ -175,7 +175,7 @@ export function SucursalesPage() {
                     key={sp.id}
                     salePoint={sp}
                     showPartner={isAdmin}
-                    showConfig={isAdmin}
+                    showConfig={true}
                     partnerName={
                       sp.ownerPartnerId
                         ? partnerById.get(sp.ownerPartnerId)?.name ?? null
@@ -351,7 +351,10 @@ function Toggle({
 }
 
 function SkeletonRow({ showPartner }: { showPartner: boolean }) {
-  const cells = showPartner ? 5 : 3;
+  // Config column siempre presente (admin ve toda la config, partner solo
+  // la sección de cuotas). Partner: Sucursal + Código + Acceso + Config = 4.
+  // Admin: + Encargado → 5.
+  const cells = showPartner ? 5 : 4;
   return (
     <tr>
       {Array.from({ length: cells }).map((_, i) => (

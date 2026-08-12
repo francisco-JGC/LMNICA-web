@@ -6,6 +6,7 @@ import {
   Loader2,
   MapPin,
   ShieldAlert,
+  Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
@@ -17,6 +18,7 @@ import { useGames } from '@/features/games/hooks/use-games';
 import { LimitRow } from '@/features/sale-limits/components/limit-row';
 import { useSaleLimits } from '@/features/sale-limits/hooks/use-sale-limits';
 import { LimitsByNumberSection } from '@/features/sale-limits-by-number/components/limits-by-number-section';
+import { SellerQuotasSection } from '@/features/sale-limits-by-seller-number/components/seller-quotas-section';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { APP_ROUTES } from '@/shared/constants/routes';
 import { cn } from '@/shared/lib/cn';
@@ -35,6 +37,10 @@ interface SectionDef {
   label: string;
   description: string;
   icon: LucideIcon;
+  /**
+   * Roles con acceso a esta sección. Omitir = admin-only.
+   */
+  roles?: readonly UserRole[];
 }
 
 const SECTIONS: readonly SectionDef[] = [
@@ -51,6 +57,13 @@ const SECTIONS: readonly SectionDef[] = [
     icon: Hash,
   },
   {
+    key: 'seller-quotas',
+    label: 'Cuotas por vendedor',
+    description: 'Reparte el tope por número entre los vendedores',
+    icon: Users,
+    roles: [UserRole.ADMIN, UserRole.PARTNER],
+  },
+  {
     key: 'game-prizes',
     label: 'Premios por juego',
     description: 'Multiplicador de pago por juego',
@@ -62,19 +75,44 @@ export function SucursalConfigPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const session = useSession();
-  const [selectedSection, setSelectedSection] = useState<string>(
-    SECTIONS[0].key,
+  const role = session?.user.role;
+
+  // Filtro las secciones por rol. Admin ve todas; partner solo la sección
+  // de cuotas por vendedor (repartir el tope entre sus sellers).
+  const visibleSections = useMemo(
+    () =>
+      SECTIONS.filter((s) => {
+        if (!s.roles) return role === UserRole.ADMIN;
+        return role !== undefined && s.roles.includes(role);
+      }),
+    [role],
   );
+  const [selectedSection, setSelectedSection] = useState<string>('');
 
   const { data: salePoints, isLoading } = useSalePoints();
 
-  if (session && session.user.role !== UserRole.ADMIN) {
+  // Rol no autorizado (seller) → fuera. Partners caen a las secciones
+  // que su rol permita (por ahora solo "seller-quotas").
+  if (role === UserRole.SELLER) {
     return <Navigate to={APP_ROUTES.sucursales} replace />;
   }
   const salePoint = useMemo(
     () => (salePoints ?? []).find((sp) => sp.id === id) ?? null,
     [salePoints, id],
   );
+
+  // Si el rol no puede ver la sección seleccionada (o aún no eligió una)
+  // caemos a la primera visible. Sin esto, un partner que entra al page
+  // vería un contenido vacío porque `selectedSection` arranca en `''`.
+  const effectiveSection = useMemo(() => {
+    if (
+      selectedSection &&
+      visibleSections.some((s) => s.key === selectedSection)
+    ) {
+      return selectedSection;
+    }
+    return visibleSections[0]?.key ?? '';
+  }, [selectedSection, visibleSections]);
 
   if (isLoading) {
     return (
@@ -127,17 +165,21 @@ export function SucursalConfigPage() {
 
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
         <SectionNav
-          selected={selectedSection}
+          sections={visibleSections}
+          selected={effectiveSection}
           onSelect={setSelectedSection}
         />
         <div>
-          {selectedSection === 'sale-limits' && (
+          {effectiveSection === 'sale-limits' && (
             <SaleLimitsSection salePoint={salePoint} />
           )}
-          {selectedSection === 'sale-limits-by-number' && (
+          {effectiveSection === 'sale-limits-by-number' && (
             <LimitsByNumberSection salePoint={salePoint} />
           )}
-          {selectedSection === 'game-prizes' && (
+          {effectiveSection === 'seller-quotas' && (
+            <SellerQuotasSection salePoint={salePoint} />
+          )}
+          {effectiveSection === 'game-prizes' && (
             <GamePrizesSection salePoint={salePoint} />
           )}
         </div>
@@ -147,16 +189,18 @@ export function SucursalConfigPage() {
 }
 
 function SectionNav({
+  sections,
   selected,
   onSelect,
 }: {
+  sections: readonly SectionDef[];
   selected: string;
   onSelect: (key: string) => void;
 }) {
   return (
     <nav className="rounded-2xl border border-border bg-card p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <ul className="flex flex-col gap-1">
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const Icon = s.icon;
           const active = s.key === selected;
           return (
