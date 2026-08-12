@@ -345,7 +345,11 @@ function BranchSummaryCard({
     };
   }, [rows]);
 
-  const isPositive = totals.net >= 0;
+  // Con el toggle "Salarios" apagado, el vendedor quiere ver el restante
+  // SIN descontar salarios de encargado. El backend siempre los descuenta
+  // en `row.net`, así que sumamos de vuelta cuando el toggle está en OFF.
+  const effectiveNet = showSalary ? totals.net : totals.net + totals.partnerSalary;
+  const isPositive = effectiveNet >= 0;
 
   return (
     <article
@@ -370,7 +374,7 @@ function BranchSummaryCard({
         </div>
       </header>
 
-      <NetBanner value={totals.net} />
+      <NetBanner value={effectiveNet} />
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <Stat label="Facturado" value={totals.billed} tone="emerald" />
@@ -407,7 +411,13 @@ function BranchCard({
   showSalary: boolean;
 }) {
   const cardRef = useRef<HTMLElement>(null);
-  const isPositive = row.net >= 0;
+  // Con "Salarios" apagado, no descontamos el salario del encargado en el
+  // restante — el backend siempre lo mete en `row.net`, así que sumamos
+  // de vuelta cuando el toggle está en OFF.
+  const effectiveNet = showSalary
+    ? row.net
+    : row.net + (row.partnerSalary ?? 0);
+  const isPositive = effectiveNet >= 0;
   // Sólo mostramos salario del encargado si hay % configurado en la
   // sucursal — sin % no cobra (mismo criterio que el SellerCard).
   const showManagerSalary =
@@ -448,11 +458,11 @@ function BranchCard({
                 : null
           }
           fileName={`sucursal-${row.salePointName.replace(/\s+/g, '-').toLowerCase()}.png`}
-          message={`Reporte de ${row.salePointName} — Restante: ${formatCurrency(row.net)}.`}
+          message={`Reporte de ${row.salePointName} — Restante: ${formatCurrency(effectiveNet)}.`}
         />
       </header>
 
-      <NetBanner value={row.net} />
+      <NetBanner value={effectiveNet} />
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <Stat label="Facturado" value={row.billed} tone="emerald" />
@@ -525,11 +535,13 @@ function SellerCard({
 }) {
   const cardRef = useRef<HTMLElement>(null);
   // Ganancia neta del vendedor = ventas − premios que debería entregar
-  // − su propio salario (comisión). El salario es un costo real; se
-  // descuenta aunque el toggle "showSalary" lo esté ocultando en la UI.
-  // Movimientos (depósitos/retiros/gastos) no entran porque son a
-  // nivel sucursal, no del vendedor.
-  const net = row.billed - row.wonPrize - (row.salary ?? 0);
+  // − su propio salario (comisión). Movimientos (depósitos/retiros/gastos)
+  // no entran porque son a nivel sucursal, no del vendedor.
+  //
+  // Con el toggle "Salarios" apagado, tampoco se descuenta el salario del
+  // vendedor — el vendedor quiere ver el neto sin ese costo.
+  const net =
+    row.billed - row.wonPrize - (showSalary ? row.salary ?? 0 : 0);
   const isPositive = net >= 0;
   return (
     <article
