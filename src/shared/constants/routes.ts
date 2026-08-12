@@ -13,6 +13,7 @@ export const APP_ROUTES = {
   sellerReport: '/reporte-vendedor',
   branchFlowReport: '/reporte-flujo-sucursal',
   billing: '/facturacion',
+  salesByNumber: '/ventas-por-numero',
   winners: '/ganadores',
   expenses: '/gastos',
   movements: '/movimientos',

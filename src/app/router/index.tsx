@@ -68,6 +68,11 @@ const SellerReportPage = lazy(() =>
     default: m.SellerReportPage,
   })),
 );
+const SalesByNumberPage = lazy(() =>
+  import('@/features/sales-by-number/pages/sales-by-number-page').then((m) => ({
+    default: m.SalesByNumberPage,
+  })),
+);
 const SaleLimitsPage = lazy(() =>
   import('@/features/sale-limits/pages/sale-limits-page').then((m) => ({
     default: m.SaleLimitsPage,
@@ -199,6 +204,7 @@ const router = createBrowserRouter([
               { path: APP_ROUTES.sellerReport, element: <SellerReportPage /> },
               { path: APP_ROUTES.branchFlowReport, element: <BranchFlowPage /> },
               { path: APP_ROUTES.billing, element: <BillingPage /> },
+              { path: APP_ROUTES.salesByNumber, element: <SalesByNumberPage /> },
               { path: APP_ROUTES.winners, element: <WinnersPage /> },
               { path: APP_ROUTES.expenses, element: <ExpensesPage /> },
               { path: APP_ROUTES.movements, element: <MovementsPage /> },
