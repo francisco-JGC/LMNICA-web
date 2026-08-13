@@ -43,17 +43,19 @@ export interface ListTicketsParams {
   to?: string;
   /** "HH:MM" wall clock in Managua — filter by draw schedule time. */
   drawTime?: string;
-  page: number;
-  limit: number;
 }
 
 export interface ListTicketsResponse {
   items: Ticket[];
-  page: number;
-  limit: number;
+  /** Cantidad total (mismo que `items.length` — el endpoint no pagina). */
   total: number;
+  /** Suma de `total` (facturado) sobre TODOS los items válidos. */
+  totalBilled: number;
+  /** Suma de `wonPrize` (evaluado contra draw_results) sobre TODOS los items. */
+  totalWonPrize: number;
 }
 
 export interface VoidTicketPayload {
-  reason: string;
+  /** Motivo — opcional. Vacío/omitido se persiste como `null` en el backend. */
+  reason?: string;
 }

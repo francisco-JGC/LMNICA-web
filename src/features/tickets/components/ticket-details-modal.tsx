@@ -75,7 +75,9 @@ export function TicketDetailsModal({
     isAdmin && ticket.status === 'valid' && !ticket.drawExecuted;
 
   const handleVoid = async () => {
-    if (!reason.trim() || isPending) return;
+    if (isPending) return;
+    // Motivo opcional — si el user no lo escribe, mandamos string vacío
+    // y el backend lo persiste como `voided_reason = null`.
     await mutateAsync({
       id: ticket.id,
       payload: { reason: reason.trim() },
@@ -106,10 +108,10 @@ export function TicketDetailsModal({
             <button
               type="button"
               onClick={handleVoid}
-              disabled={reason.trim().length === 0 || isPending}
+              disabled={isPending}
               className={cn(
                 'inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white transition',
-                reason.trim().length === 0 || isPending
+                isPending
                   ? 'cursor-not-allowed opacity-60'
                   : 'hover:bg-rose-700',
               )}
@@ -160,14 +162,15 @@ export function TicketDetailsModal({
       {voiding ? (
         <div className="mt-5 space-y-2">
           <label className="block text-sm font-semibold text-foreground">
-            Motivo de anulación
+            Motivo de anulación{' '}
+            <span className="font-normal text-muted-foreground">(opcional)</span>
           </label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             maxLength={200}
-            placeholder="Escribe la razón por la que estás anulando este ticket"
+            placeholder="Escribí la razón (opcional)"
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             autoFocus
           />
@@ -239,14 +242,16 @@ export function TicketDetailsModal({
             </div>
           </div>
 
-          {ticket.status === 'voided' && ticket.voidedReason && (
+          {ticket.status === 'voided' && (
             <div className="mt-5 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">
-                Motivo de anulación
+                {ticket.voidedReason ? 'Motivo de anulación' : 'Anulado'}
               </div>
-              <div className="mt-1 text-sm text-rose-900">
-                {ticket.voidedReason}
-              </div>
+              {ticket.voidedReason && (
+                <div className="mt-1 text-sm text-rose-900">
+                  {ticket.voidedReason}
+                </div>
+              )}
               {ticket.voidedAt && (
                 <div className="mt-2 text-xs text-rose-700/70">
                   Anulado el {formatFull(ticket.voidedAt)}

@@ -19,8 +19,6 @@ export async function listTickets(
       from: params.from || undefined,
       to: params.to || undefined,
       drawTime: params.drawTime || undefined,
-      page: params.page,
-      limit: params.limit,
     },
   });
   return data;

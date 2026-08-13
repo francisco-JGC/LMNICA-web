@@ -101,10 +101,8 @@ export function SalesPage() {
       sellerId: sellerId || undefined,
       from: from ? `${from}T00:00:00-06:00` : undefined,
       to: to ? `${to}T23:59:59-06:00` : undefined,
-      page: page + 1,
-      limit: PAGE_SIZE,
     }),
-    [status, gameId, drawTime, salePointId, sellerId, from, to, page],
+    [status, gameId, drawTime, salePointId, sellerId, from, to],
   );
 
   const { data, isLoading, error, isFetching } = useTickets(params);
@@ -167,19 +165,33 @@ export function SalesPage() {
   }, [items, search]);
 
   const stats = useMemo(() => {
-    let billed = 0;
+    // `billed` y `won` los devuelve el server calculados sobre el rango
+    // completo. `voided` es local — cuenta los items visibles (con el
+    // limit 100k del server prácticamente coincide con el total real).
     let voided = 0;
     for (const t of items) {
       if (t.status === 'voided') voided += 1;
-      else billed += t.total;
     }
-    return { total, billed, voided };
-  }, [items, total]);
+    return {
+      total,
+      billed: data?.totalBilled ?? 0,
+      won: data?.totalWonPrize ?? 0,
+      voided,
+    };
+  }, [items, total, data]);
 
-  const rangeStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(total, (page + 1) * PAGE_SIZE);
+  // Paginación en cliente sobre `filteredItems`: el server ya devuelve
+  // todo el rango, la UI solo trocea de a PAGE_SIZE para no renderizar
+  // miles de filas de una.
+  const pagedItems = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return filteredItems.slice(start, start + PAGE_SIZE);
+  }, [filteredItems, page]);
+  const filteredCount = filteredItems.length;
+  const rangeStart = filteredCount === 0 ? 0 : page * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(filteredCount, (page + 1) * PAGE_SIZE);
   const hasPrev = page > 0;
-  const hasNext = rangeEnd < total;
+  const hasNext = rangeEnd < filteredCount;
 
   const selectedTicket = useMemo(
     () => items.find((t) => t.id === selectedId) ?? null,
@@ -197,6 +209,8 @@ export function SalesPage() {
           <span>
             <span className="font-semibold text-foreground">{stats.total}</span>{' '}
             tickets · <span className="font-semibold text-emerald-700">{formatCurrency(stats.billed)}</span> facturado
+            {' · '}
+            <span className="font-semibold text-rose-700">{formatCurrency(stats.won)}</span> ganado
             {stats.voided > 0 && (
               <> · <span className="font-semibold text-rose-700">{stats.voided}</span> anulados</>
             )}
@@ -381,7 +395,7 @@ export function SalesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((ticket) => (
+                pagedItems.map((ticket) => (
                   <TicketRow
                     key={ticket.id}
                     ticket={ticket}
