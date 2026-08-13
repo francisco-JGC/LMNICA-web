@@ -35,10 +35,13 @@ export function SellerQuotasSection({ salePoint }: { salePoint: SalePoint }) {
     isLoading: loadingQuotas,
     error: errorQuotas,
   } = useSaleLimitsBySellerNumber(salePoint.id);
+  // `useUsers` no acepta filtro por sucursal en su params — traemos todos
+  // los sellers y filtramos localmente por `salePointId`. El backend ya
+  // aplica el partner scope, así que un partner solo verá sellers de sus
+  // sucursales accesibles.
   const { data: sellersPage, isLoading: loadingSellers } = useUsers({
     role: UserRole.SELLER,
-    salePointId: salePoint.id,
-    limit: 200,
+    limit: 500,
     offset: 0,
   });
 
@@ -47,8 +50,11 @@ export function SellerQuotasSection({ salePoint }: { salePoint: SalePoint }) {
     [games],
   );
   const sellers = useMemo(
-    () => sellersPage?.items.filter((u) => u.isActive) ?? [],
-    [sellersPage],
+    () =>
+      (sellersPage?.items ?? []).filter(
+        (u) => u.isActive && u.salePointId === salePoint.id,
+      ),
+    [sellersPage, salePoint.id],
   );
 
   const isLoading = loadingLimits || loadingQuotas || loadingSellers;
