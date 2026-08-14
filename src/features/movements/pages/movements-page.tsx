@@ -54,12 +54,6 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return isoDate(d);
-}
-
 const TYPE_META: Record<
   MovementType,
   { label: string; classes: string; icon: React.ReactNode }

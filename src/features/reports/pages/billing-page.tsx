@@ -25,14 +25,6 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day;
-  const start = new Date(d);
-  start.setDate(d.getDate() + diff);
-  return start;
-}
-
 const PCT_FMT = new Intl.NumberFormat('es-NI', {
   style: 'percent',
   minimumFractionDigits: 1,

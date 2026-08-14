@@ -23,14 +23,6 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day;
-  const start = new Date(d);
-  start.setDate(d.getDate() + diff);
-  return start;
-}
-
 export function BranchTotalsPage() {
   const [gameId, setGameId] = useState('');
   const [from, setFrom] = useState(isoDate(new Date()));

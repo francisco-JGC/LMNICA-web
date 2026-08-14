@@ -32,12 +32,6 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return isoDate(d);
-}
-
 export function WinnersPage() {
   const [gameId, setGameId] = useState<string>('');
   const [salePointId, setSalePointId] = useState<string>('');

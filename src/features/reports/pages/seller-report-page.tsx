@@ -24,14 +24,6 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function startOfWeekMonday(d: Date): Date {
-  const day = d.getDay(); // 0 = Sunday
-  const diff = (day === 0 ? -6 : 1) - day;
-  const start = new Date(d);
-  start.setDate(d.getDate() + diff);
-  return start;
-}
-
 export function SellerReportPage() {
   const [salePointId, setSalePointId] = useState('');
   const [sellerId, setSellerId] = useState('');
