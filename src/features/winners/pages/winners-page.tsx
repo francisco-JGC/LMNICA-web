@@ -42,7 +42,7 @@ export function WinnersPage() {
   const [gameId, setGameId] = useState<string>('');
   const [salePointId, setSalePointId] = useState<string>('');
   const [sellerId, setSellerId] = useState<string>('');
-  const [from, setFrom] = useState<string>(daysAgoIso(30));
+  const [from, setFrom] = useState<string>(isoDate(new Date()));
   const [to, setTo] = useState<string>(isoDate(new Date()));
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<WinningTicket | null>(null);

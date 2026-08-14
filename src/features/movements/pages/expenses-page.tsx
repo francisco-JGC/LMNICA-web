@@ -56,7 +56,7 @@ function daysAgoIso(days: number): string {
 
 export function ExpensesPage() {
   const [salePointId, setSalePointId] = useState('');
-  const [from, setFrom] = useState(daysAgoIso(30));
+  const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);

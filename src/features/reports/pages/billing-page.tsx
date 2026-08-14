@@ -42,7 +42,7 @@ const PCT_FMT = new Intl.NumberFormat('es-NI', {
 export function BillingPage() {
   const [salePointId, setSalePointId] = useState('');
   const [sellerId, setSellerId] = useState('');
-  const [from, setFrom] = useState(isoDate(startOfWeekMonday(new Date())));
+  const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
 
   const params = useMemo(

@@ -33,7 +33,7 @@ function startOfWeekMonday(d: Date): Date {
 
 export function BranchTotalsPage() {
   const [gameId, setGameId] = useState('');
-  const [from, setFrom] = useState(isoDate(startOfWeekMonday(new Date())));
+  const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
 
   const params = useMemo(

@@ -109,7 +109,7 @@ const TYPE_SIGN: Record<MovementType, '+' | '-' | ''> = {
 export function MovementsPage() {
   const [salePointId, setSalePointId] = useState('');
   const [type, setType] = useState<MovementType | ''>('');
-  const [from, setFrom] = useState(daysAgoIso(30));
+  const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
