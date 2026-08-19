@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   Dices,
@@ -39,6 +39,13 @@ export function WinnersPage() {
   const [from, setFrom] = useState<string>(isoDate(new Date()));
   const [to, setTo] = useState<string>(isoDate(new Date()));
   const [search, setSearch] = useState('');
+  // Debounce igual que en `sales-page` — el filtro server-side sobre folio
+  // ignora rango de fechas, así que un folio de otro día aparece igual.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
   const [selected, setSelected] = useState<WinningTicket | null>(null);
   // Ticket completo abierto desde el modal de ganador. Solo uno de los
   // dos modales está visible a la vez — al abrir el detalle cerramos el
@@ -52,8 +59,9 @@ export function WinnersPage() {
       sellerId: sellerId || undefined,
       from: from ? `${from}T00:00:00-06:00` : undefined,
       to: to ? `${to}T23:59:59-06:00` : undefined,
+      search: debouncedSearch || undefined,
     }),
-    [gameId, salePointId, sellerId, from, to],
+    [gameId, salePointId, sellerId, from, to, debouncedSearch],
   );
 
   const winnersQuery = useWinners(params);
@@ -85,15 +93,9 @@ export function WinnersPage() {
     return m;
   }, [sellersPage]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return winners.filter((w) => {
-      if (!q) return true;
-      const folioMatch = w.ticket.folio.toLowerCase().includes(q);
-      const clientMatch = (w.ticket.client ?? '').toLowerCase().includes(q);
-      return folioMatch || clientMatch;
-    });
-  }, [winners, search]);
+  // Filtro por folio/cliente vive server-side (ver `params.search`); acá
+  // simplemente reenviamos la lista.
+  const filtered = winners;
 
   const stats = useMemo(() => {
     let count = 0;

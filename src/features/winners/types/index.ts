@@ -51,4 +51,7 @@ export interface ListWinnersParams {
   sellerId?: string;
   from?: string;
   to?: string;
+  drawTime?: string;
+  /** Búsqueda por folio (prefix) o cliente (anywhere). Bypass rango. */
+  search?: string;
 }

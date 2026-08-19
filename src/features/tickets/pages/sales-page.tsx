@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   ChevronLeft,
@@ -89,6 +89,15 @@ export function SalesPage() {
   const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
   const [search, setSearch] = useState('');
+  // Debounce: mandamos el search al backend después de 300ms sin cambios
+  // para no disparar un request en cada keystroke. El filtro por folio
+  // vive server-side desde que el backend ignora el rango de fechas cuando
+  // llega `search` — de otro modo los folios de otros días no aparecían.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -101,8 +110,18 @@ export function SalesPage() {
       sellerId: sellerId || undefined,
       from: from ? `${from}T00:00:00-06:00` : undefined,
       to: to ? `${to}T23:59:59-06:00` : undefined,
+      search: debouncedSearch || undefined,
     }),
-    [status, gameId, drawTime, salePointId, sellerId, from, to],
+    [
+      status,
+      gameId,
+      drawTime,
+      salePointId,
+      sellerId,
+      from,
+      to,
+      debouncedSearch,
+    ],
   );
 
   const { data, isLoading, error, isFetching } = useTickets(params);
@@ -154,15 +173,9 @@ export function SalesPage() {
       .sort((a, b) => a.drawTime.localeCompare(b.drawTime));
   }, [schedules]);
 
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((t) => {
-      if (t.folio.toLowerCase().includes(q)) return true;
-      if ((t.client ?? '').toLowerCase().includes(q)) return true;
-      return false;
-    });
-  }, [items, search]);
+  // El filtrado por folio/cliente ahora ocurre server-side (ver `params.search`).
+  // Nombre `filteredItems` retenido porque `pagedItems` y las stats lo consumen.
+  const filteredItems = items;
 
   const stats = useMemo(() => {
     // `billed` y `won` los devuelve el server calculados sobre el rango

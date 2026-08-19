@@ -15,6 +15,8 @@ export async function listWinningTickets(
       sellerId: params.sellerId || undefined,
       from: params.from || undefined,
       to: params.to || undefined,
+      drawTime: params.drawTime || undefined,
+      search: params.search || undefined,
     },
   });
   return data;

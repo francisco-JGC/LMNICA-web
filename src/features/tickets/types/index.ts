@@ -43,6 +43,12 @@ export interface ListTicketsParams {
   to?: string;
   /** "HH:MM" wall clock in Managua — filter by draw schedule time. */
   drawTime?: string;
+  /**
+   * Búsqueda por folio (prefix) o cliente (anywhere), case-insensitive.
+   * Cuando viene, el backend ignora `from`/`to`/`drawTime` — el objetivo
+   * es encontrar el ticket sin importar cuándo se emitió.
+   */
+  search?: string;
 }
 
 export interface ListTicketsResponse {
