@@ -152,10 +152,14 @@ export function GamePrizeRow({
   // Games without an easy default (Diaria, Fechas, Tica, etc.) don't show
   // the second input — one less field for the operator to look past.
   const showEasy = prize.easyDefault !== null;
-  // "Premio par" es una regla específica de Juega 3, no de todo THREE_DIGIT.
-  // Gana 3 y Tresmonazo comparten tipo pero el negocio no las incluye. Si en
-  // el futuro cambia, se ajusta acá + en game.entity.ts + en el upsert use case.
-  const showPair = prize.gameSlug === 'juega3';
+  // El campo "Par" se muestra si el juego tiene default configurado O si
+  // la sucursal ya tiene un override. Es config-driven — antes se
+  // hardcodeaba `slug === 'juega3'` pero eso rompía si el slug de la DB
+  // difería (`juega-3`, etc.); admin no podía ver ni configurar el campo,
+  // y todos los fácil pagaban precio regular aunque el ganador tuviera
+  // pareja. Config del juego = signal autoritativo.
+  const showPair =
+    prize.pairEasyDefault !== null || prize.overridePairEasy !== null;
 
   const statusBadge =
     status !== 'idle'
