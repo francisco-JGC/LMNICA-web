@@ -15,7 +15,6 @@ import {
   KpiCard,
   type KpiDelta,
 } from '@/features/home/components/kpi-card';
-import { MonthlyChart } from '@/features/home/components/monthly-chart';
 import { RecentWinnersCard } from '@/features/home/components/recent-winners-card';
 import { TopRankingCard } from '@/features/home/components/top-ranking-card';
 import { useDashboardSummary } from '@/features/home/hooks/use-dashboard-summary';
@@ -135,8 +134,6 @@ export function HomePage() {
               )}
             />
           </div>
-
-          <MonthlyChart data={data.monthlySeries} />
 
           <GamesBreakdown items={data.byGame} />
 
@@ -296,7 +293,6 @@ function HomeSkeleton() {
           />
         ))}
       </div>
-      <div className="h-96 animate-pulse rounded-2xl border border-border/70 bg-card" />
       <div className="h-64 animate-pulse rounded-2xl border border-border/70 bg-card" />
     </div>
   );

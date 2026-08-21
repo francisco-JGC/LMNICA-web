@@ -1,10 +1,3 @@
-export interface MonthlySeriesPoint {
-  monthStart: string;
-  label: string;
-  billed: number;
-  won: number;
-}
-
 export interface GameBreakdownItem {
   gameId: string;
   gameName: string;
@@ -61,7 +54,6 @@ export interface DashboardSummary {
 
   totalUsers: number;
 
-  monthlySeries: MonthlySeriesPoint[];
   byGame: GameBreakdownItem[];
   /**
    * Ganadores recientes de los últimos 30 días (no filtrados por el rango
