@@ -126,7 +126,7 @@ export function HomePage() {
               value={formatCurrency(data.weeklyBilled)}
               icon={Sparkles}
               tone="emerald"
-              hint="Últimos 7 días vs anteriores"
+              hint="Lunes a hoy vs misma semana pasada"
               delta={pctDelta(
                 data.weeklyBilled,
                 data.weeklyBilledPrev,
