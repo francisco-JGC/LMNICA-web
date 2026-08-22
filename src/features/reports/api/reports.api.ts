@@ -50,6 +50,10 @@ export async function getSellerReport(
     {
       params: {
         salePointId: params.salePointId || undefined,
+        salePointIds:
+          params.salePointIds && params.salePointIds.length > 0
+            ? params.salePointIds.join(',')
+            : undefined,
         sellerId: params.sellerId || undefined,
         from: params.from || undefined,
         to: params.to || undefined,

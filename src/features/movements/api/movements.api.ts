@@ -62,6 +62,13 @@ export async function getMovementsBalance(
     {
       params: {
         salePointId: params.salePointId || undefined,
+        // Backend acepta CSV en `salePointIds`. Solo lo mandamos si hay al
+        // menos un id — con lista vacía el server interpreta "sin filtro"
+        // (que es el mismo comportamiento que omitirlo).
+        salePointIds:
+          params.salePointIds && params.salePointIds.length > 0
+            ? params.salePointIds.join(',')
+            : undefined,
         from: params.from || undefined,
         to: params.to || undefined,
       },

@@ -21,6 +21,7 @@ import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { cn } from '@/shared/lib/cn';
 import { formatCurrency } from '@/shared/lib/format';
 import { shareCardImage } from '@/shared/lib/share-whatsapp';
+import { MultiSelect } from '@/shared/ui/multi-select';
 import { Select } from '@/shared/ui/select';
 
 import type { MovementsBalanceRow } from '@/features/movements/types';
@@ -48,7 +49,8 @@ function isoDate(d: Date): string {
  * para revisar sucursal por sucursal sin abrir una vista distinta.
  */
 export function MovementsBalancePage() {
-  const [salePointId, setSalePointId] = useState('');
+  // Multi-sucursal. `[]` significa "todas las visibles según partner scope".
+  const [salePointIds, setSalePointIds] = useState<string[]>([]);
   const [sellerId, setSellerId] = useState('');
   const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
@@ -56,11 +58,11 @@ export function MovementsBalancePage() {
 
   const rangeParams = useMemo(
     () => ({
-      salePointId: salePointId || undefined,
+      salePointIds: salePointIds.length > 0 ? salePointIds : undefined,
       from: from ? `${from}T00:00:00-06:00` : undefined,
       to: to ? `${to}T23:59:59-06:00` : undefined,
     }),
-    [salePointId, from, to],
+    [salePointIds, from, to],
   );
 
   const balanceQuery = useMovementsBalance(rangeParams);
@@ -97,8 +99,8 @@ export function MovementsBalancePage() {
       </header>
 
       <FiltersBar
-        salePointId={salePointId}
-        onSalePointChange={setSalePointId}
+        salePointIds={salePointIds}
+        onSalePointIdsChange={setSalePointIds}
         salePoints={salePoints ?? []}
         sellerId={sellerId}
         onSellerChange={setSellerId}
@@ -140,8 +142,8 @@ export function MovementsBalancePage() {
           icon={<MapPin className="size-4" />}
           title="Sucursales"
           hint={
-            salePointId
-              ? '1 sucursal filtrada'
+            salePointIds.length > 0
+              ? `${salePointIds.length} sucursal${salePointIds.length === 1 ? '' : 'es'} filtrada${salePointIds.length === 1 ? '' : 's'}`
               : `${balanceRows.length} sucursal${balanceRows.length === 1 ? '' : 'es'}`
           }
         />
@@ -182,8 +184,8 @@ function SectionHeader({
 }
 
 function FiltersBar({
-  salePointId,
-  onSalePointChange,
+  salePointIds,
+  onSalePointIdsChange,
   salePoints,
   sellerId,
   onSellerChange,
@@ -195,8 +197,8 @@ function FiltersBar({
   showSalary,
   onShowSalaryChange,
 }: {
-  salePointId: string;
-  onSalePointChange: (v: string) => void;
+  salePointIds: string[];
+  onSalePointIdsChange: (v: string[]) => void;
   salePoints: { id: string; name: string }[];
   sellerId: string;
   onSellerChange: (v: string) => void;
@@ -211,16 +213,17 @@ function FiltersBar({
   return (
     <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Sucursal">
-          <Select
-            value={salePointId}
-            onChange={onSalePointChange}
+        <Field label="Sucursales">
+          <MultiSelect
+            values={salePointIds}
+            onChange={onSalePointIdsChange}
             leadingIcon={<MapPin className="size-4" />}
-            placeholder="Todas"
-            options={[
-              { value: '', label: 'Todas las sucursales' },
-              ...salePoints.map((sp) => ({ value: sp.id, label: sp.name })),
-            ]}
+            placeholder="Todas las sucursales"
+            itemLabel="sucursales"
+            options={salePoints.map((sp) => ({
+              value: sp.id,
+              label: sp.name,
+            }))}
           />
         </Field>
         <Field label="Vendedor">

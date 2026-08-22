@@ -51,6 +51,8 @@ export interface MovementsBalanceRow {
 
 export interface MovementsBalanceParams {
   salePointId?: string;
+  /** Multi-sucursal (se serializa como CSV al backend). */
+  salePointIds?: string[];
   from?: string;
   to?: string;
 }

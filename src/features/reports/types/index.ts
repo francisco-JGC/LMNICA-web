@@ -15,6 +15,8 @@ export interface SellerReportRow {
 
 export interface SellerReportParams {
   salePointId?: string;
+  /** Multi-sucursal (CSV al backend). */
+  salePointIds?: string[];
   sellerId?: string;
   /** ISO with Managua offset (`-06:00`). Inclusive. */
   from?: string;
