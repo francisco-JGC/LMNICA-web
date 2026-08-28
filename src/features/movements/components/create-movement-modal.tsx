@@ -95,6 +95,12 @@ export function CreateMovementModal({
   defaultType,
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
+  // UUID de idempotencia — se genera UNA VEZ al abrir el modal y se
+  // preserva durante toda su vida. Así, si la request falla y el
+  // usuario tapea "Guardar" de nuevo, va el mismo id y el backend
+  // dedupea. Al cerrar/abrir se regenera para que un movement NUEVO no
+  // reuse el id de uno ya creado.
+  const [clientRequestId, setClientRequestId] = useState<string>('');
   const { data: salePoints, isLoading: loadingSalePoints } = useSalePoints();
   const { mutateAsync, isPending, error, reset } = useCreateMovement();
 
@@ -108,6 +114,14 @@ export function CreateMovementModal({
       reset();
     }
   }, [open, defaultSalePointId, defaultType, reset]);
+
+  // Genera el UUID SOLO cuando `open` transiciona a true; no depende de
+  // `defaultSalePointId`/`defaultType` para no rotarlo si el padre
+  // cambia esos props mientras el modal está abierto (rompería el
+  // dedupe de un retry en curso).
+  useEffect(() => {
+    if (open) setClientRequestId(crypto.randomUUID());
+  }, [open]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -128,6 +142,7 @@ export function CreateMovementModal({
       description: form.description.trim() || undefined,
       // Send as Managua wall-clock ISO — server just stores it.
       occurredAt: `${form.occurredDate}T00:00:00-06:00`,
+      clientRequestId,
     });
     onClose();
   };

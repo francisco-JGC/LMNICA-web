@@ -84,6 +84,13 @@ export interface CreateMovementPayload {
   description?: string;
   /** ISO 8601. Optional — server defaults to now. */
   occurredAt?: string;
+  /**
+   * UUID v4 opcional para dedupear reintentos. El modal genera uno al
+   * abrirse; si el usuario tapea "Guardar" dos veces o hay retry por
+   * timeout, la segunda request cae en el mismo id y el backend
+   * devuelve el movement ya creado en vez de duplicarlo.
+   */
+  clientRequestId?: string;
 }
 
 export type BranchFlowKind = 'ticket_sale' | 'prize_payout' | 'movement';
