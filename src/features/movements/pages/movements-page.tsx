@@ -92,6 +92,20 @@ const TYPE_META: Record<
   },
 };
 
+/** Override labels for seller-level movements (sellerId != null). */
+const SELLER_TYPE_META: Partial<Record<MovementType, { label: string; classes: string; icon: React.ReactNode }>> = {
+  [MovementType.DEPOSIT]: {
+    label: 'Cobro',
+    classes: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20',
+    icon: <ArrowUpRight className="size-3" strokeWidth={2.6} />,
+  },
+  [MovementType.WITHDRAWAL]: {
+    label: 'Crédito',
+    classes: 'bg-blue-500/10 text-blue-700 ring-blue-500/20',
+    icon: <Wallet className="size-3" strokeWidth={2.6} />,
+  },
+};
+
 /** Sign shown next to the amount so the reader knows if it adds or subtracts. */
 const TYPE_SIGN: Record<MovementType, '+' | '-' | ''> = {
   [MovementType.EXPENSE]: '-',
@@ -396,7 +410,11 @@ function MovementRow({
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const meta = TYPE_META[movement.type];
+  const isSeller = destinationKind === 'seller';
+  const meta =
+    isSeller
+      ? (SELLER_TYPE_META[movement.type] ?? TYPE_META[movement.type])
+      : TYPE_META[movement.type];
   const sign = TYPE_SIGN[movement.type];
   const amountColor =
     sign === '+'

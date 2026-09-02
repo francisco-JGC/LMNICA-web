@@ -8,6 +8,8 @@ import {
   Gift,
   Loader2,
   MapPin,
+  Minus,
+  Plus,
   Save,
   Scale,
   User,
@@ -34,79 +36,110 @@ interface Props {
 
 type TargetMode = 'sucursal' | 'seller';
 
-interface FormState {
-  targetMode: TargetMode;
-  salePointId: string;
-  sellerId: string;
+interface TypeOption {
+  id: string;
   type: MovementType;
-  amount: string;
-  description: string;
-  occurredDate: string;
-  isPrizePayment: boolean;
-}
-
-const SUCURSAL_TYPE_OPTIONS: {
-  value: MovementType;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  {
-    value: MovementType.EXPENSE,
-    label: 'Gasto',
-    icon: <ArrowDownRight className="size-4 text-rose-600" />,
-  },
-  {
-    value: MovementType.DEPOSIT,
-    label: 'Depósito',
-    icon: <ArrowUpRight className="size-4 text-emerald-600" />,
-  },
-  {
-    value: MovementType.WITHDRAWAL,
-    label: 'Retiro',
-    icon: <Wallet className="size-4 text-rose-600" />,
-  },
-  {
-    value: MovementType.OPENING,
-    label: 'Apertura de caja',
-    icon: <DoorOpen className="size-4 text-slate-600" />,
-  },
-  {
-    value: MovementType.CLOSING,
-    label: 'Cierre de caja',
-    icon: <DoorClosed className="size-4 text-slate-600" />,
-  },
-  {
-    value: MovementType.ADJUSTMENT,
-    label: 'Ajuste',
-    icon: <Scale className="size-4 text-slate-600" />,
-  },
-];
-
-const SELLER_TYPE_OPTIONS: {
-  value: MovementType;
   label: string;
   icon: React.ReactNode;
   hint: string;
-}[] = [
+}
+
+const SUCURSAL_TYPE_OPTIONS: TypeOption[] = [
   {
-    value: MovementType.DEPOSIT,
-    label: 'Cobro',
+    id: 'expense',
+    type: MovementType.EXPENSE,
+    label: 'Gasto',
+    icon: <ArrowDownRight className="size-4 text-rose-600" />,
+    hint: 'Resta del balance',
+  },
+  {
+    id: 'deposit',
+    type: MovementType.DEPOSIT,
+    label: 'Depósito',
     icon: <ArrowUpRight className="size-4 text-emerald-600" />,
-    hint: 'Dinero recibido del vendedor',
+    hint: 'Suma al balance',
   },
   {
-    value: MovementType.WITHDRAWAL,
-    label: 'Crédito',
-    icon: <Wallet className="size-4 text-blue-600" />,
-    hint: 'Devolución o pago al vendedor',
+    id: 'withdrawal',
+    type: MovementType.WITHDRAWAL,
+    label: 'Retiro',
+    icon: <Wallet className="size-4 text-rose-600" />,
+    hint: 'Resta del balance',
   },
   {
-    value: MovementType.ADJUSTMENT,
+    id: 'opening',
+    type: MovementType.OPENING,
+    label: 'Apertura de caja',
+    icon: <DoorOpen className="size-4 text-slate-600" />,
+    hint: '',
+  },
+  {
+    id: 'closing',
+    type: MovementType.CLOSING,
+    label: 'Cierre de caja',
+    icon: <DoorClosed className="size-4 text-slate-600" />,
+    hint: '',
+  },
+  {
+    id: 'adjustment',
+    type: MovementType.ADJUSTMENT,
     label: 'Ajuste',
     icon: <Scale className="size-4 text-slate-600" />,
     hint: 'Corrección manual',
   },
 ];
+
+const SELLER_TYPE_OPTIONS: TypeOption[] = [
+  {
+    id: 'cobro',
+    type: MovementType.DEPOSIT,
+    label: 'Cobro',
+    icon: <ArrowUpRight className="size-4 text-emerald-600" />,
+    hint: 'Dinero recibido del vendedor',
+  },
+  {
+    id: 'credito',
+    type: MovementType.WITHDRAWAL,
+    label: 'Crédito',
+    icon: <Wallet className="size-4 text-blue-600" />,
+    hint: 'Devolución al vendedor',
+  },
+  {
+    id: 'ajuste_mas',
+    type: MovementType.DEPOSIT,
+    label: 'Ajuste +',
+    icon: <Plus className="size-4 text-emerald-600" />,
+    hint: 'Corrección que suma al balance',
+  },
+  {
+    id: 'ajuste_menos',
+    type: MovementType.WITHDRAWAL,
+    label: 'Ajuste −',
+    icon: <Minus className="size-4 text-rose-600" />,
+    hint: 'Corrección que resta del balance',
+  },
+];
+
+function defaultOptionId(mode: TargetMode, defaultType?: MovementType): string {
+  if (mode === 'seller') {
+    if (defaultType === MovementType.WITHDRAWAL) return 'credito';
+    return 'cobro';
+  }
+  // For branch, option id matches the type string value
+  const found = SUCURSAL_TYPE_OPTIONS.find((o) => o.type === defaultType);
+  return found?.id ?? 'expense';
+}
+
+interface FormState {
+  targetMode: TargetMode;
+  salePointId: string;
+  sellerId: string;
+  selectedOptionId: string;
+  amount: string;
+  description: string;
+  occurredDate: string;
+  isPrizePayment: boolean;
+}
 
 function isoDate(d: Date): string {
   const y = d.getFullYear();
@@ -119,7 +152,7 @@ const EMPTY: FormState = {
   targetMode: 'sucursal',
   salePointId: '',
   sellerId: '',
-  type: MovementType.EXPENSE,
+  selectedOptionId: 'expense',
   amount: '',
   description: '',
   occurredDate: isoDate(new Date()),
@@ -152,7 +185,7 @@ export function CreateMovementModal({
         targetMode: mode,
         salePointId: defaultSalePointId ?? '',
         sellerId: defaultSellerId ?? '',
-        type: defaultType ?? (mode === 'seller' ? MovementType.DEPOSIT : MovementType.EXPENSE),
+        selectedOptionId: defaultOptionId(mode, defaultType),
       });
       reset();
     }
@@ -170,10 +203,16 @@ export function CreateMovementModal({
     setForm((prev) => ({
       ...prev,
       targetMode: mode,
-      type: mode === 'seller' ? MovementType.DEPOSIT : MovementType.EXPENSE,
+      selectedOptionId: mode === 'seller' ? 'cobro' : 'expense',
       isPrizePayment: false,
     }));
   };
+
+  const typeOptions =
+    form.targetMode === 'seller' ? SELLER_TYPE_OPTIONS : SUCURSAL_TYPE_OPTIONS;
+
+  const selectedOption =
+    typeOptions.find((o) => o.id === form.selectedOptionId) ?? typeOptions[0];
 
   const parsedAmount = parseInt(form.amount, 10);
   const amountValid =
@@ -192,7 +231,7 @@ export function CreateMovementModal({
       salePointId: form.targetMode === 'sucursal' ? form.salePointId : undefined,
       sellerId: form.targetMode === 'seller' ? form.sellerId : undefined,
       isPrizePayment: form.isPrizePayment,
-      type: form.type,
+      type: selectedOption.type,
       amount: parsedAmount,
       description: form.description.trim() || undefined,
       occurredAt: `${form.occurredDate}T00:00:00-06:00`,
@@ -201,8 +240,7 @@ export function CreateMovementModal({
     onClose();
   };
 
-  const typeOptions =
-    form.targetMode === 'seller' ? SELLER_TYPE_OPTIONS : SUCURSAL_TYPE_OPTIONS;
+  const isSeller = form.targetMode === 'seller';
 
   return (
     <Modal
@@ -299,22 +337,27 @@ export function CreateMovementModal({
         )}
 
         <Field label="Tipo" required>
-          <div className={cn('grid gap-2', form.targetMode === 'seller' ? 'grid-cols-3' : 'grid-cols-3')}>
+          <div
+            className={cn(
+              'grid gap-2',
+              isSeller ? 'grid-cols-2' : 'grid-cols-3',
+            )}
+          >
             {typeOptions.map((opt) => (
               <TypeOption
-                key={opt.value}
-                active={form.type === opt.value}
-                onClick={() => set('type', opt.value)}
+                key={opt.id}
+                active={form.selectedOptionId === opt.id}
+                onClick={() => set('selectedOptionId', opt.id)}
                 icon={opt.icon}
                 label={opt.label}
-                hint={'hint' in opt ? (opt as { hint?: string }).hint : undefined}
+                hint={opt.hint || undefined}
               />
             ))}
           </div>
         </Field>
 
         {/* Prize payment checkbox — seller mode only */}
-        {form.targetMode === 'seller' && (
+        {isSeller && (
           <label className="flex items-center gap-2.5 rounded-lg border border-border bg-secondary/30 px-3 py-2.5 text-sm text-foreground cursor-pointer hover:bg-secondary/50 transition">
             <input
               type="checkbox"
@@ -373,7 +416,7 @@ export function CreateMovementModal({
             onChange={(e) => set('description', e.target.value)}
             maxLength={255}
             placeholder={
-              form.targetMode === 'seller'
+              isSeller
                 ? 'ej. Cobro semana 23, ajuste por diferencia en caja'
                 : 'ej. Pago de luz, remesa desde bodega, ajuste caja'
             }
