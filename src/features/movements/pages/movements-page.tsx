@@ -278,7 +278,7 @@ export function MovementsPage() {
                     key={m.id}
                     movement={m}
                     salePointName={
-                      salePointById.get(m.salePointId)?.name ?? '—'
+                      salePointById.get(m.salePointId ?? '')?.name ?? '—'
                     }
                     createdByName={
                       m.createdById
