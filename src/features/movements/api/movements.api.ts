@@ -11,6 +11,7 @@ import type {
   MovementsBalanceResponse,
   SellerMovementsBalanceParams,
   SellerMovementsBalanceResponse,
+  UpdateMovementPayload,
 } from '@/features/movements/types';
 
 export async function listMovements(
@@ -34,6 +35,14 @@ export async function createMovement(
   payload: CreateMovementPayload,
 ): Promise<Movement> {
   const { data } = await http.post<Movement>('/movements', payload);
+  return data;
+}
+
+export async function updateMovement(
+  id: string,
+  payload: UpdateMovementPayload,
+): Promise<Movement> {
+  const { data } = await http.patch<Movement>(`/movements/${id}`, payload);
   return data;
 }
 
