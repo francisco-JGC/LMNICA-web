@@ -23,23 +23,12 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function todayIso(): string {
-  return isoDate(new Date());
-}
-
-function daysAgoIso(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return isoDate(d);
-}
-
 export function LatestResultsPage() {
   const session = useSession();
   const isPartner = session?.user.role === UserRole.PARTNER;
 
   const [gameId, setGameId] = useState<string>('');
-  const [from, setFrom] = useState<string>(daysAgoIso(7));
-  const [to, setTo] = useState<string>(todayIso());
+  const [date, setDate] = useState<string>(() => isoDate(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<DrawResult | null>(null);
 
@@ -51,12 +40,12 @@ export function LatestResultsPage() {
   const params = useMemo(
     () => ({
       gameId: gameId || undefined,
-      from: from ? `${from}T00:00:00-06:00` : undefined,
-      to: to ? endOfDayParam(to) : undefined,
+      from: `${date}T00:00:00-06:00`,
+      to: endOfDayParam(date),
       limit: DEFAULT_LIMIT,
       offset: 0,
     }),
-    [gameId, from, to],
+    [gameId, date],
   );
 
   const { data: games } = useGames();
@@ -103,7 +92,7 @@ export function LatestResultsPage() {
         </div>
       </header>
 
-      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-3">
+      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:grid-cols-2">
         <Field label="Juego">
           <Select
             value={gameId}
@@ -117,26 +106,13 @@ export function LatestResultsPage() {
             ]}
           />
         </Field>
-        <Field label="Desde">
+        <Field label="Fecha">
           <div className="relative">
             <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="date"
-              value={from}
-              max={to}
-              onChange={(e) => setFrom(e.target.value)}
-              className={cn(inputClass, 'pl-9')}
-            />
-          </div>
-        </Field>
-        <Field label="Hasta">
-          <div className="relative">
-            <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(e) => setTo(e.target.value)}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
               className={cn(inputClass, 'pl-9')}
             />
           </div>
