@@ -41,6 +41,10 @@ export async function updateSalePoint(
   return data;
 }
 
+export async function deleteSalePoint(id: string): Promise<void> {
+  await http.delete(`/sale-points/${id}`);
+}
+
 export async function setAssignedPartners(
   id: string,
   payload: SetAssignedPartnersPayload,

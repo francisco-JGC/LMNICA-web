@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useSession } from '@/features/auth/hooks/use-session';
 import {
+  useDeleteSalePoint,
   useSetAssignedPartners,
   useUpdateSalePoint,
 } from '@/features/sale-points/hooks/use-sale-points';
@@ -64,12 +65,14 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
   const [pickerValue, setPickerValue] = useState('');
   const [partnerPickerValue, setPartnerPickerValue] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { mutateAsync: mutateSalePoint, isPending: savingInfo, error: infoError, reset: resetInfo } =
     useUpdateSalePoint();
   const { mutateAsync: mutateUser, isPending: mutatingUser } = useUpdateUser();
   const { mutateAsync: mutateAssignedPartners, isPending: mutatingAssigned } =
     useSetAssignedPartners();
+  const { mutateAsync: mutateDelete, isPending: deleting } = useDeleteSalePoint();
 
   const { data: sellersPage, isLoading: loadingSellers } = useUsers({
     role: UserRole.SELLER,
@@ -88,6 +91,7 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
       setEditing(false);
       setPickerValue('');
       setPartnerPickerValue('');
+      setConfirmDelete(false);
       resetInfo();
     }
   }, [open, salePoint, resetInfo]);
@@ -143,6 +147,11 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
   const partnerName = salePoint.ownerPartnerId
     ? partners.find((p) => p.id === salePoint.ownerPartnerId)?.name ?? null
     : null;
+
+  const handleDelete = async () => {
+    await mutateDelete({ id: salePoint.id, name: salePoint.name });
+    onClose();
+  };
 
   const handleSaveInfo = async () => {
     if (!isValid || savingInfo) return;
@@ -243,34 +252,76 @@ export function SalePointDetailsModal({ open, onClose, salePoint }: Props) {
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-            >
-              Cerrar
-            </button>
-            {isAdmin && (
+            {isAdmin && confirmDelete ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  ¿Eliminar permanentemente?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-white transition',
+                    deleting ? 'cursor-not-allowed opacity-60' : 'hover:bg-destructive/90',
+                  )}
+                >
+                  {deleting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" strokeWidth={2.4} />
+                  )}
+                  Sí, eliminar
+                </button>
+              </>
+            ) : (
               <>
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    navigate(sucursalConfigPath(salePoint.id));
-                  }}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary"
+                  onClick={onClose}
+                  className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
                 >
-                  <Settings className="size-4" strokeWidth={2.4} />
-                  Configuración
+                  Cerrar
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-                >
-                  <Pencil className="size-4" strokeWidth={2.4} />
-                  Editar
-                </button>
+                {isAdmin && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(true)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                    >
+                      <Trash2 className="size-4" strokeWidth={2.4} />
+                      Eliminar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        navigate(sucursalConfigPath(salePoint.id));
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary"
+                    >
+                      <Settings className="size-4" strokeWidth={2.4} />
+                      Configuración
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Pencil className="size-4" strokeWidth={2.4} />
+                      Editar
+                    </button>
+                  </>
+                )}
               </>
             )}
           </>

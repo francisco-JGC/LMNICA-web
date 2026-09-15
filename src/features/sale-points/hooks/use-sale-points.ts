@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 
 import {
   createSalePoint,
+  deleteSalePoint,
   listSalePoints,
   setAssignedPartners,
   toggleSalePoint,
@@ -122,6 +123,28 @@ export function useUpdateSalePoint() {
     },
     onError: (error) => {
       toast.error('No se pudo actualizar la sucursal', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+export function useDeleteSalePoint() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, { id: string; name: string }>({
+    mutationFn: async ({ id }) => {
+      try {
+        await deleteSalePoint(id);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    onSuccess: (_, { name }) => {
+      toast.success(`Sucursal "${name}" eliminada`);
+      qc.invalidateQueries({ queryKey: salePointsQueryKeys.all });
+    },
+    onError: (error) => {
+      toast.error('No se pudo eliminar la sucursal', {
         description: error.message,
       });
     },
