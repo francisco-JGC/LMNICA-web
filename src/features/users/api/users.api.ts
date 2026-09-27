@@ -22,6 +22,11 @@ export async function listUsers(
   return data;
 }
 
+export async function findUserById(id: string): Promise<User> {
+  const { data } = await http.get<User>(`/users/${id}`);
+  return data;
+}
+
 export async function createUser(payload: CreateUserPayload): Promise<User> {
   const { data } = await http.post<User>('/users', payload);
   return data;
@@ -32,5 +37,13 @@ export async function updateUser(
   payload: UpdateUserPayload,
 ): Promise<User> {
   const { data } = await http.patch<User>(`/users/${id}`, payload);
+  return data;
+}
+
+export async function updateMyMobileSalesProfile(payload: {
+  mobileSalesEnabled: boolean;
+  defaultSalePointId: string | null;
+}): Promise<User> {
+  const { data } = await http.patch<User>('/users/me/mobile-sales', payload);
   return data;
 }

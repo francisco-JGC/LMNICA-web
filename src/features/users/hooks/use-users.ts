@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 
 import {
   createUser,
+  findUserById,
   listUsers,
   updateUser,
 } from '@/features/users/api/users.api';
@@ -94,5 +95,20 @@ export function useUpdateUser() {
         description: error.message,
       });
     },
+  });
+}
+
+export function useFindUser(id: string | undefined) {
+  return useQuery<User, ApiError>({
+    queryKey: [...usersQueryKeys.all, 'detail', id] as const,
+    queryFn: async () => {
+      try {
+        return await findUserById(id!);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
   });
 }

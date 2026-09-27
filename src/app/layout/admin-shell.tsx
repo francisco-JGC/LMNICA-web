@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Menu, X } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Smartphone, X } from 'lucide-react';
 
 import { SidebarNav } from '@/app/layout/sidebar-nav';
 import { useSidebarStore } from '@/app/layout/sidebar-store';
 import { useLogout, useSession } from '@/features/auth/hooks/use-session';
+import { UserRole } from '@/features/auth/types';
+import { MobileSalesProfileModal } from '@/features/users/components/mobile-sales-profile-modal';
 import { APP_ROUTES } from '@/shared/constants/routes';
 import { cn } from '@/shared/lib/cn';
 
@@ -16,9 +18,8 @@ export function AdminShell() {
   const isOpen = useSidebarStore((s) => s.isOpen);
   const openSidebar = useSidebarStore((s) => s.open);
   const closeSidebar = useSidebarStore((s) => s.close);
+  const [mobileSalesOpen, setMobileSalesOpen] = useState(false);
 
-  // Close the drawer whenever the route changes so tapping a nav item both
-  // navigates and hides the overlay.
   useEffect(() => {
     closeSidebar();
   }, [location.pathname, closeSidebar]);
@@ -34,7 +35,13 @@ export function AdminShell() {
         onOpenSidebar={openSidebar}
         name={session?.user.name ?? '—'}
         role={session?.user.role ?? ''}
+        isAdmin={session?.user.role === UserRole.ADMIN}
         onLogout={handleLogout}
+        onMobileSales={() => setMobileSalesOpen(true)}
+      />
+      <MobileSalesProfileModal
+        open={mobileSalesOpen}
+        onClose={() => setMobileSalesOpen(false)}
       />
 
       {/* Backdrop */}
@@ -78,12 +85,16 @@ function Topbar({
   onOpenSidebar,
   name,
   role,
+  isAdmin,
   onLogout,
+  onMobileSales,
 }: {
   onOpenSidebar: () => void;
   name: string;
   role: string;
+  isAdmin: boolean;
   onLogout: () => void;
+  onMobileSales: () => void;
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card">
@@ -101,7 +112,13 @@ function Topbar({
           <span className="text-sm font-black tracking-tight">LM NICA</span>
         </div>
 
-        <UserMenu name={name} role={role} onLogout={onLogout} />
+        <UserMenu
+          name={name}
+          role={role}
+          isAdmin={isAdmin}
+          onLogout={onLogout}
+          onMobileSales={onMobileSales}
+        />
       </div>
     </header>
   );
@@ -110,11 +127,15 @@ function Topbar({
 function UserMenu({
   name,
   role,
+  isAdmin,
   onLogout,
+  onMobileSales,
 }: {
   name: string;
   role: string;
+  isAdmin: boolean;
   onLogout: () => void;
+  onMobileSales: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -180,6 +201,20 @@ function UserMenu({
               {role}
             </div>
           </div>
+          {isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onMobileSales();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-foreground hover:bg-secondary"
+            >
+              <Smartphone className="size-4 text-muted-foreground" />
+              Modo vendedor
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
