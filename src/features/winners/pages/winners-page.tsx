@@ -262,6 +262,8 @@ export function WinnersPage() {
             // sorteo). El endpoint de ganadores no lo emite bien hoy.
             setViewingTicket({
               ...selected.ticket,
+              salePointName: null,
+              sellerName: null,
               drawExecuted: true,
               wonPrize: selected.totalPrize,
             });
