@@ -16,6 +16,7 @@ import {
   Trophy,
   User,
   UserSearch,
+  Users,
   Wallet,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -90,6 +91,11 @@ const NAV_ITEMS: readonly NavItem[] = [
     label: 'Límites de Venta',
     icon: ShieldAlert,
     roles: ADMIN_ONLY,
+  },
+  {
+    to: APP_ROUTES.sellerQuotas,
+    label: 'Cuotas por Vendedor',
+    icon: Users,
   },
   {
     to: APP_ROUTES.latestResults,

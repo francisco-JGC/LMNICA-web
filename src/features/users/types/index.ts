@@ -17,6 +17,8 @@ export interface User {
   nationalId: string | null;
   paymentPercentage: number | null;
   salePointId: string | null;
+  mobileSalesEnabled: boolean;
+  defaultSalePointId: string | null;
   createdById: string | null;
   createdByName: string | null;
   createdAt: string;

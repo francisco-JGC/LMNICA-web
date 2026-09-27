@@ -23,6 +23,7 @@ export const APP_ROUTES = {
   sucursalConfig: '/sucursales/:id/configuracion',
   draws: '/sorteos',
   saleLimits: '/limites-venta',
+  sellerQuotas: '/cuotas-vendedor',
   latestResults: '/ultimos-resultados',
   systemConfig: '/configuracion-sistema',
 } as const;
