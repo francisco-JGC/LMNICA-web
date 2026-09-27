@@ -22,6 +22,9 @@ export interface Ticket {
   count: number;
   drawAt: string;
   cutoffMinutes: number;
+  wonPrize: number;
+  isPaid: boolean;
+  paidAt: string | null;
   lines: TicketLine[];
   createdAt: string;
   updatedAt: string;
