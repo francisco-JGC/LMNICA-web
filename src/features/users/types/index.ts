@@ -28,6 +28,7 @@ export interface User {
 export interface ListUsersParams {
   role?: UserRole;
   search?: string;
+  salePointId?: string;
   limit: number;
   offset: number;
 }
@@ -58,6 +59,7 @@ export interface CreateUserPayload {
  */
 export interface UpdateUserPayload {
   name?: string;
+  username?: string;
   role?: UserRole;
   isActive?: boolean;
   password?: string;

@@ -13,12 +13,14 @@ export interface Movement {
   id: string;
   salePointId: string | null;
   sellerId: string | null;
+  sellerName: string | null;
   isPrizePayment: boolean;
   type: MovementType;
   amount: number;
   description: string;
   occurredAt: string;
   createdById: string | null;
+  createdByName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,6 +86,7 @@ export interface UpdateMovementPayload {
   type?: MovementType;
   amount?: number;
   description?: string;
+  occurredAt?: string;
 }
 
 export interface CreateMovementPayload {
@@ -137,6 +140,9 @@ export interface BranchFlowParams {
   salePointId: string;
   from?: string;
   to?: string;
+  gameId?: string;
+  sellerId?: string;
+  drawAt?: string;
 }
 
 export interface BranchFlowResponse {
