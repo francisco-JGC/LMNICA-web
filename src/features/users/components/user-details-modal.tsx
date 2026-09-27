@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
+  ArrowRightLeft,
   Eye,
   EyeOff,
   Loader2,
   Lock,
   MapPin,
   Pencil,
+  RefreshCw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -15,7 +18,13 @@ import {
 
 import { useSession } from '@/features/auth/hooks/use-session';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
-import { useUpdateUser } from '@/features/users/hooks/use-users';
+import {
+  useSyncPreview,
+  useSyncSellerBranch,
+  useTransferPreview,
+  useTransferSellerBranch,
+  useUpdateUser,
+} from '@/features/users/hooks/use-users';
 import { cn } from '@/shared/lib/cn';
 import { generatePassword } from '@/shared/lib/password';
 import { Modal } from '@/shared/ui/modal';
@@ -55,30 +64,107 @@ function stateFromUser(user: User): FormState {
   };
 }
 
+type TransferMode =
+  | 'idle'
+  | 'select'
+  | 'executing'
+  | 'sync-confirm'
+  | 'sync-executing';
+
 export function UserDetailsModal({ open, onClose, user }: Props) {
   const session = useSession();
-  const canEditRole = session?.user.role === UserRole.ADMIN;
+  const isAdmin = session?.user.role === UserRole.ADMIN;
+  const canEditRole = isAdmin;
 
   const [editing, setEditing] = useState(false);
+  const [transferMode, setTransferMode] = useState<TransferMode>('idle');
+  const [newSalePointId, setNewSalePointId] = useState('');
+  const [txProgress, setTxProgress] = useState(0);
+  const [txPhase, setTxPhase] = useState('');
   const [form, setForm] = useState<FormState | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const animTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   const { data: salePoints } = useSalePoints();
   const { mutateAsync, isPending, error, reset } = useUpdateUser();
+  const transferMutation = useTransferSellerBranch();
+  const syncMutation = useSyncSellerBranch();
+  const { data: preview, isFetching: previewFetching } = useTransferPreview(
+    user?.id ?? '',
+    newSalePointId,
+    !!(user && newSalePointId && transferMode === 'select'),
+  );
+  const { data: syncPreview, isFetching: syncPreviewFetching } = useSyncPreview(
+    user?.id ?? '',
+    !!(user && transferMode === 'sync-confirm'),
+  );
 
   // Reset every time we open or the user changes.
   useEffect(() => {
     if (open && user) {
       setForm(stateFromUser(user));
       setEditing(false);
+      setTransferMode('idle');
+      setNewSalePointId('');
+      setTxProgress(0);
+      setTxPhase('');
       setShowPassword(false);
       reset();
     }
   }, [open, user, reset]);
 
+  // Animated progress bar while a transfer or sync runs.
+  useEffect(() => {
+    const isRunning = transferMode === 'executing' || transferMode === 'sync-executing';
+    if (!isRunning) return;
+
+    const activePreview = transferMode === 'sync-executing' ? syncPreview : preview;
+    const ticketCount = activePreview?.ticketCount ?? 0;
+    const movementCount = activePreview?.movementCount ?? 0;
+    const ticketMs = Math.min(Math.max(ticketCount * 4, 800), 10_000);
+    const movementMs = Math.min(Math.max(movementCount * 8, 400), 4_000);
+    const verb = transferMode === 'sync-executing' ? 'Sincronizando' : 'Transfiriendo';
+
+    setTxProgress(0);
+    setTxPhase('Iniciando...');
+
+    const t = [
+      setTimeout(() => { setTxProgress(8); setTxPhase('Actualizando datos del vendedor...'); }, 200),
+      setTimeout(() => { setTxProgress(15); setTxPhase(`${verb} tickets (${ticketCount.toLocaleString()} registros)...`); }, 500),
+      setTimeout(() => { setTxProgress(72); setTxPhase(`${verb} movimientos (${movementCount.toLocaleString()} registros)...`); }, 500 + ticketMs),
+      setTimeout(() => { setTxProgress(88); setTxPhase('Finalizando...'); }, 500 + ticketMs + movementMs),
+    ];
+    animTimers.current = t;
+    return () => { t.forEach(clearTimeout); };
+  }, [transferMode, preview?.ticketCount, preview?.movementCount, syncPreview?.ticketCount, syncPreview?.movementCount]);
+
+  // When transfer completes, finish animation then close.
+  useEffect(() => {
+    if (!transferMutation.isSuccess || transferMode !== 'executing') return;
+    setTxProgress(100);
+    setTxPhase('¡Transferencia completada!');
+    const t = setTimeout(() => { setTransferMode('idle'); setNewSalePointId(''); onClose(); }, 1500);
+    return () => clearTimeout(t);
+  }, [transferMutation.isSuccess, transferMode, onClose]);
+
+  // When sync completes, finish animation then close.
+  useEffect(() => {
+    if (!syncMutation.isSuccess || transferMode !== 'sync-executing') return;
+    setTxProgress(100);
+    setTxPhase('¡Sincronización completada!');
+    const t = setTimeout(() => { setTransferMode('idle'); onClose(); }, 1500);
+    return () => clearTimeout(t);
+  }, [syncMutation.isSuccess, transferMode, onClose]);
+
   const salePointName = useMemo(() => {
     if (!user?.salePointId || !salePoints) return null;
     return salePoints.find((sp) => sp.id === user.salePointId)?.name ?? null;
   }, [user?.salePointId, salePoints]);
+
+  const availableTargetBranches = useMemo(
+    () => (salePoints ?? []).filter((sp) => sp.id !== user?.salePointId),
+    [salePoints, user?.salePointId],
+  );
 
   if (!user || !form) return null;
 
@@ -150,85 +236,207 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
     });
   };
 
+  const handleConfirmTransfer = async () => {
+    if (!newSalePointId || transferMutation.isPending) return;
+    const targetBranch = salePoints?.find((sp) => sp.id === newSalePointId);
+    setTransferMode('executing');
+    await transferMutation.mutateAsync({
+      userId: user.id,
+      newSalePointId,
+      sellerName: user.name,
+      branchName: targetBranch?.name ?? newSalePointId,
+    });
+  };
+
+  const handleConfirmSync = async () => {
+    if (syncMutation.isPending) return;
+    const currentBranch = salePoints?.find((sp) => sp.id === user.salePointId);
+    setTransferMode('sync-executing');
+    await syncMutation.mutateAsync({
+      userId: user.id,
+      sellerName: user.name,
+      branchName: currentBranch?.name ?? '',
+    });
+  };
+
+  const isRunning = transferMode === 'executing' || transferMode === 'sync-executing';
+  const isSeller = user.role === UserRole.SELLER;
+  const canTransfer = isAdmin && isSeller && !!user.salePointId;
+
+  const modalTitle = isRunning
+    ? transferMode === 'executing'
+      ? 'Transfiriendo datos...'
+      : 'Sincronizando datos...'
+    : transferMode === 'select'
+      ? 'Transferir a otra sucursal'
+      : transferMode === 'sync-confirm'
+        ? 'Sincronizar datos históricos'
+        : editing
+          ? 'Editar usuario'
+          : 'Detalles del usuario';
+
+  const modalDescription =
+    transferMode === 'select'
+      ? 'Todos los tickets y movimientos del vendedor serán movidos a la sucursal destino.'
+      : transferMode === 'sync-confirm'
+        ? 'Se actualizarán los registros históricos cuya sucursal no coincide con la asignación actual del vendedor.'
+        : editing
+          ? 'Los campos vacíos no modifican el valor actual.'
+          : undefined;
+
+  const footer = isRunning ? null : editing ? (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setEditing(false);
+          setForm(stateFromUser(user));
+          setShowPassword(false);
+          reset();
+        }}
+        className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={!isValid || isPending}
+        className={cn(
+          'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition',
+          !isValid || isPending
+            ? 'cursor-not-allowed opacity-60'
+            : 'hover:bg-primary/90',
+        )}
+      >
+        {isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Save className="size-4" strokeWidth={2.4} />
+        )}
+        Guardar cambios
+      </button>
+    </>
+  ) : transferMode === 'select' ? (
+    <>
+      <button
+        type="button"
+        onClick={() => { setTransferMode('idle'); setNewSalePointId(''); }}
+        className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={handleConfirmTransfer}
+        disabled={!newSalePointId || previewFetching || transferMutation.isPending}
+        className={cn(
+          'inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-bold text-white transition',
+          !newSalePointId || previewFetching || transferMutation.isPending
+            ? 'cursor-not-allowed opacity-60'
+            : 'hover:bg-amber-600',
+        )}
+      >
+        {transferMutation.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <ArrowRightLeft className="size-4" strokeWidth={2.4} />
+        )}
+        Confirmar transferencia
+      </button>
+    </>
+  ) : transferMode === 'sync-confirm' ? (
+    <>
+      <button
+        type="button"
+        onClick={() => setTransferMode('idle')}
+        className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        onClick={handleConfirmSync}
+        disabled={syncPreviewFetching || syncMutation.isPending}
+        className={cn(
+          'inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition',
+          syncPreviewFetching || syncMutation.isPending
+            ? 'cursor-not-allowed opacity-60'
+            : 'hover:bg-indigo-700',
+        )}
+      >
+        {syncMutation.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RefreshCw className="size-4" strokeWidth={2.4} />
+        )}
+        Confirmar sincronización
+      </button>
+    </>
+  ) : (
+    <>
+      <button
+        type="button"
+        onClick={handleToggleAccess}
+        disabled={isPending}
+        className={cn(
+          'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
+          user.isActive
+            ? 'text-rose-700 hover:bg-rose-500/10'
+            : 'text-emerald-700 hover:bg-emerald-500/10',
+          isPending && 'cursor-not-allowed opacity-60',
+        )}
+      >
+        {isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : user.isActive ? (
+          <Lock className="size-4" strokeWidth={2.4} />
+        ) : (
+          <Unlock className="size-4" strokeWidth={2.4} />
+        )}
+        {user.isActive ? 'Bloquear acceso' : 'Reactivar acceso'}
+      </button>
+      <div className="flex items-center gap-2">
+        {canTransfer && (
+          <button
+            type="button"
+            onClick={() => setTransferMode('sync-confirm')}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-500/10 transition"
+          >
+            <RefreshCw className="size-4" strokeWidth={2.4} />
+            Sincronizar datos
+          </button>
+        )}
+        {canTransfer && (
+          <button
+            type="button"
+            onClick={() => setTransferMode('select')}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-500/10 transition"
+          >
+            <ArrowRightLeft className="size-4" strokeWidth={2.4} />
+            Transferir sucursal
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+        >
+          <Pencil className="size-4" strokeWidth={2.4} />
+          Editar
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
-      title={editing ? 'Editar usuario' : 'Detalles del usuario'}
-      description={
-        editing
-          ? 'Los campos vacíos no modifican el valor actual.'
-          : undefined
-      }
+      onClose={isRunning ? () => {} : onClose}
+      title={modalTitle}
+      description={modalDescription}
       size="max-w-3xl"
-      footer={
-        editing ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                setForm(stateFromUser(user));
-                setShowPassword(false);
-                reset();
-              }}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-secondary"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!isValid || isPending}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition',
-                !isValid || isPending
-                  ? 'cursor-not-allowed opacity-60'
-                  : 'hover:bg-primary/90',
-              )}
-            >
-              {isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" strokeWidth={2.4} />
-              )}
-              Guardar cambios
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={handleToggleAccess}
-              disabled={isPending}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
-                user.isActive
-                  ? 'text-rose-700 hover:bg-rose-500/10'
-                  : 'text-emerald-700 hover:bg-emerald-500/10',
-                isPending && 'cursor-not-allowed opacity-60',
-              )}
-            >
-              {isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : user.isActive ? (
-                <Lock className="size-4" strokeWidth={2.4} />
-              ) : (
-                <Unlock className="size-4" strokeWidth={2.4} />
-              )}
-              {user.isActive ? 'Bloquear acceso' : 'Reactivar acceso'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-            >
-              <Pencil className="size-4" strokeWidth={2.4} />
-              Editar
-            </button>
-          </>
-        )
-      }
+      footer={footer}
     >
       <UserHeader user={user} salePointName={salePointName} />
 
@@ -238,7 +446,113 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
         </div>
       )}
 
-      {editing ? (
+      {isRunning ? (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-border bg-muted/40 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground">{txPhase}</span>
+              <span className="text-sm font-mono text-muted-foreground">{txProgress}%</span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-border">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all duration-700 ease-out',
+                  txProgress === 100
+                    ? 'bg-emerald-500'
+                    : transferMode === 'sync-executing'
+                      ? 'bg-indigo-500'
+                      : 'bg-amber-500',
+                )}
+                style={{ width: `${txProgress}%` }}
+              />
+            </div>
+            {txProgress < 100 && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No cierres esta ventana mientras se procesa la operación.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : transferMode === 'sync-confirm' ? (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 ring-1 ring-inset ring-indigo-200/60">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-indigo-600" strokeWidth={2.2} />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-indigo-900">
+                  Sincronizar datos de <span className="font-black">{user.name}</span> a{' '}
+                  <span className="font-black">{salePointName ?? '—'}</span>
+                </p>
+                <p className="text-xs text-indigo-700">
+                  Solo se actualizarán los registros cuya sucursal no coincide con la asignación actual.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <CountCard
+              label="Tickets a sincronizar"
+              count={syncPreview?.ticketCount}
+              loading={syncPreviewFetching}
+              color="indigo"
+            />
+            <CountCard
+              label="Movimientos a sincronizar"
+              count={syncPreview?.movementCount}
+              loading={syncPreviewFetching}
+              color="indigo"
+            />
+          </div>
+        </div>
+      ) : transferMode === 'select' ? (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 ring-1 ring-inset ring-amber-200/60">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600" strokeWidth={2.2} />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-amber-900">
+                  Transferir <span className="font-black">{user.name}</span> desde{' '}
+                  <span className="font-black">{salePointName ?? '—'}</span>
+                </p>
+                <p className="text-xs text-amber-700">
+                  Todos los tickets y movimientos históricos serán reasignados a la sucursal destino.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Sucursal destino
+            </label>
+            <Select
+              value={newSalePointId}
+              onChange={setNewSalePointId}
+              leadingIcon={<MapPin className="size-4" />}
+              placeholder="Selecciona una sucursal..."
+              options={availableTargetBranches.map((sp) => ({
+                value: sp.id,
+                label: sp.name,
+              }))}
+            />
+          </div>
+          {newSalePointId && (
+            <div className="grid grid-cols-2 gap-3">
+              <CountCard
+                label="Tickets a transferir"
+                count={preview?.ticketCount}
+                loading={previewFetching}
+                color="amber"
+              />
+              <CountCard
+                label="Movimientos a transferir"
+                count={preview?.movementCount}
+                loading={previewFetching}
+                color="amber"
+              />
+            </div>
+          )}
+        </div>
+      ) : editing ? (
         <EditForm
           form={form}
           onChange={set}
@@ -252,6 +566,35 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
         <DetailsGrid user={user} salePointName={salePointName} />
       )}
     </Modal>
+  );
+}
+
+function CountCard({
+  label,
+  count,
+  loading,
+  color,
+}: {
+  label: string;
+  count: number | undefined;
+  loading: boolean;
+  color: 'amber' | 'indigo';
+}) {
+  const colorClass =
+    color === 'amber'
+      ? 'bg-amber-50/80 border-amber-200 ring-amber-200/60 text-amber-700'
+      : 'bg-indigo-50/80 border-indigo-200 ring-indigo-200/60 text-indigo-700';
+  return (
+    <div className={cn('rounded-xl border p-4 ring-1 ring-inset', colorClass)}>
+      <p className="text-xs font-semibold uppercase tracking-[0.06em] opacity-70">{label}</p>
+      {loading ? (
+        <Loader2 className="mt-2 size-5 animate-spin opacity-50" />
+      ) : (
+        <p className="mt-1 text-2xl font-black tabular-nums">
+          {(count ?? 0).toLocaleString()}
+        </p>
+      )}
+    </div>
   );
 }
 

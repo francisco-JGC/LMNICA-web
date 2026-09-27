@@ -47,3 +47,50 @@ export async function updateMyMobileSalesProfile(payload: {
   const { data } = await http.patch<User>('/users/me/mobile-sales', payload);
   return data;
 }
+
+export interface TransferPreview {
+  ticketCount: number;
+  movementCount: number;
+}
+
+export interface TransferResult {
+  user: User;
+  ticketsMoved: number;
+  movementsMoved: number;
+}
+
+export async function fetchTransferPreview(
+  userId: string,
+  newSalePointId: string,
+): Promise<TransferPreview> {
+  const { data } = await http.get<TransferPreview>(
+    `/users/${userId}/transfer-branch/preview`,
+    { params: { newSalePointId } },
+  );
+  return data;
+}
+
+export async function transferSellerBranch(
+  userId: string,
+  newSalePointId: string,
+): Promise<TransferResult> {
+  const { data } = await http.post<TransferResult>(
+    `/users/${userId}/transfer-branch`,
+    { newSalePointId },
+  );
+  return data;
+}
+
+export async function fetchSyncPreview(userId: string): Promise<TransferPreview> {
+  const { data } = await http.get<TransferPreview>(
+    `/users/${userId}/sync-branch/preview`,
+  );
+  return data;
+}
+
+export async function syncSellerBranch(userId: string): Promise<TransferResult> {
+  const { data } = await http.post<TransferResult>(
+    `/users/${userId}/sync-branch`,
+  );
+  return data;
+}

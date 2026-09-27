@@ -3,9 +3,15 @@ import { toast } from 'sonner';
 
 import {
   createUser,
+  fetchSyncPreview,
+  fetchTransferPreview,
   findUserById,
   listUsers,
+  syncSellerBranch,
+  transferSellerBranch,
   updateUser,
+  type TransferPreview,
+  type TransferResult,
 } from '@/features/users/api/users.api';
 import { toApiError } from '@/shared/api/error-mapper';
 
@@ -110,5 +116,95 @@ export function useFindUser(id: string | undefined) {
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useTransferPreview(
+  userId: string,
+  newSalePointId: string,
+  enabled: boolean,
+) {
+  return useQuery<TransferPreview, ApiError>({
+    queryKey: ['transfer-preview', userId, newSalePointId],
+    queryFn: async () => {
+      try {
+        return await fetchTransferPreview(userId, newSalePointId);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useSyncPreview(userId: string, enabled: boolean) {
+  return useQuery<TransferPreview, ApiError>({
+    queryKey: ['sync-preview', userId],
+    queryFn: async () => {
+      try {
+        return await fetchSyncPreview(userId);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useSyncSellerBranch() {
+  const qc = useQueryClient();
+  return useMutation<
+    TransferResult,
+    ApiError,
+    { userId: string; sellerName: string; branchName: string }
+  >({
+    mutationFn: async ({ userId }) => {
+      try {
+        return await syncSellerBranch(userId);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    onSuccess: (result, { sellerName, branchName }) => {
+      toast.success(`Datos de ${sellerName} sincronizados a ${branchName}`, {
+        description: `${result.ticketsMoved} tickets y ${result.movementsMoved} movimientos actualizados`,
+      });
+      qc.invalidateQueries({ queryKey: usersQueryKeys.all });
+    },
+    onError: (error) => {
+      toast.error('No se pudo sincronizar los datos', {
+        description: error.message,
+      });
+    },
+  });
+}
+
+export function useTransferSellerBranch() {
+  const qc = useQueryClient();
+  return useMutation<
+    TransferResult,
+    ApiError,
+    { userId: string; newSalePointId: string; sellerName: string; branchName: string }
+  >({
+    mutationFn: async ({ userId, newSalePointId }) => {
+      try {
+        return await transferSellerBranch(userId, newSalePointId);
+      } catch (error) {
+        throw toApiError(error);
+      }
+    },
+    onSuccess: (result, { sellerName, branchName }) => {
+      toast.success(`${sellerName} transferido a ${branchName}`, {
+        description: `${result.ticketsMoved} tickets y ${result.movementsMoved} movimientos transferidos`,
+      });
+      qc.invalidateQueries({ queryKey: usersQueryKeys.all });
+    },
+    onError: (error) => {
+      toast.error('No se pudo transferir al vendedor', {
+        description: error.message,
+      });
+    },
   });
 }
