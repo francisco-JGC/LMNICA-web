@@ -120,10 +120,11 @@ export function SaleLimitsPage() {
 
   const drawTimes = useMemo(() => {
     if (!schedules) return [];
-    return schedules
-      .filter((s) => s.isActive)
-      .map((s) => s.drawTime)
-      .sort();
+    return [...new Set(
+      schedules
+        .filter((s) => s.isActive)
+        .map((s) => s.drawTime),
+    )].sort();
   }, [schedules]);
 
   useEffect(() => {
