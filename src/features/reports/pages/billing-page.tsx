@@ -53,9 +53,18 @@ export function BillingPage() {
   const { data: salePoints } = useSalePoints();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
-    limit: 100,
+    salePointId: salePointId || undefined,
+    limit: 500,
     offset: 0,
   });
+
+  const sellerOptions = useMemo(() => {
+    const all = sellersPage?.items ?? [];
+    return [
+      { value: '', label: 'Todos los vendedores' },
+      ...all.map((u) => ({ value: u.id, label: u.name })),
+    ];
+  }, [sellersPage]);
 
   const totals = useMemo(() => {
     let billed = 0;
@@ -90,7 +99,7 @@ export function BillingPage() {
           <Field label="Sucursal">
             <Select
               value={salePointId}
-              onChange={setSalePointId}
+              onChange={(v) => { setSalePointId(v); setSellerId(''); }}
               leadingIcon={<MapPin className="size-4" />}
               placeholder="Todas"
               options={[
@@ -108,13 +117,7 @@ export function BillingPage() {
               onChange={setSellerId}
               leadingIcon={<UserRound className="size-4" />}
               placeholder="Todos"
-              options={[
-                { value: '', label: 'Todos los vendedores' },
-                ...(sellersPage?.items.map((u) => ({
-                  value: u.id,
-                  label: u.name,
-                })) ?? []),
-              ]}
+              options={sellerOptions}
             />
           </Field>
           <Field label="Desde">

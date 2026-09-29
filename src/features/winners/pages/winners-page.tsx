@@ -16,7 +16,7 @@ import { useUsers } from '@/features/users/hooks/use-users';
 import { WinnerDetailsModal } from '@/features/winners/components/winner-details-modal';
 import { useWinners } from '@/features/winners/hooks/use-winners';
 import { cn } from '@/shared/lib/cn';
-import { downloadXlsx, fmtDate } from '@/shared/lib/export-xlsx';
+import { downloadXlsx, fmtDateTime } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
 import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
@@ -77,6 +77,7 @@ export function WinnersPage() {
   const { data: salePoints } = useSalePoints();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
+    salePointId: salePointId || undefined,
     limit: 500,
     offset: 0,
   });
@@ -97,36 +98,14 @@ export function WinnersPage() {
     return m;
   }, [sellersPage]);
 
-  // Cascade: al elegir sucursal solo se muestran sus vendedores.
   const sellerOptions = useMemo(() => {
-    const all = sellersPage?.items ?? [];
-    const filtered = salePointId
-      ? all.filter((u) => u.salePointId === salePointId)
-      : all;
+    const all = (sellersPage?.items ?? []).filter((u) => u.isActive);
     return [
       { value: '', label: 'Todos los vendedores' },
-      ...filtered.map((u) => ({ value: u.id, label: u.name })),
+      ...all.map((u) => ({ value: u.id, label: u.name })),
     ];
-  }, [sellersPage, salePointId]);
+  }, [sellersPage]);
 
-  const handleExport = async () => {
-    downloadXlsx(`ganadores-${from}-${to}`, [
-      {
-        name: 'Ganadores',
-        headers: ['Folio', 'Fecha sorteo', 'Juego', 'Sucursal', 'Vendedor', 'Cliente', 'Premio', 'Pagado'],
-        rows: winners.map((w) => [
-          w.ticket.folio,
-          fmtDate(w.ticket.drawAt),
-          gameById.get(w.ticket.gameId)?.name ?? '—',
-          salePointById.get(w.ticket.salePointId)?.name ?? '—',
-          userById.get(w.ticket.sellerId)?.name ?? '—',
-          w.ticket.client ?? '',
-          w.totalPrize,
-          w.ticket.isPaid ? 'Sí' : 'No',
-        ]),
-      },
-    ]);
-  };
 
   // Filtro por folio/cliente vive server-side (ver `params.search`); acá
   // simplemente reenviamos la lista.
@@ -149,10 +128,35 @@ export function WinnersPage() {
           <Trophy className="size-5 text-muted-foreground" />
           <h1 className="text-2xl font-black tracking-tight">Ganadores</h1>
         </div>
-        <ExportButton disabled={winners.length === 0} onExport={handleExport} />
+        <div className="flex items-center gap-3">
+          {isFetching && (
+            <span className="text-xs text-muted-foreground animate-pulse">
+              Actualizando…
+            </span>
+          )}
+          <ExportButton
+            disabled={winners.length === 0}
+            onExport={() => {
+              downloadXlsx('ganadores', [{
+                name: 'Ganadores',
+                headers: ['Folio', 'Sorteo', 'Juego', 'Sucursal', 'Vendedor', 'Cliente', 'Premio Total', 'Pagado'],
+                rows: winners.map((w) => [
+                  w.ticket.folio,
+                  fmtDateTime(w.ticket.drawAt),
+                  gameById.get(w.ticket.gameId)?.name ?? '—',
+                  salePointById.get(w.ticket.salePointId)?.name ?? '—',
+                  userById.get(w.ticket.sellerId)?.name ?? '—',
+                  w.ticket.client ?? '',
+                  w.totalPrize,
+                  w.ticket.isPaid ? 'Sí' : 'No',
+                ]),
+              }]);
+            }}
+          />
+        </div>
       </header>
 
-      <div className="grid gap-4">
+      <div className={cn('grid gap-4 transition-opacity', isFetching && 'opacity-50')}>
         <StatCard
           tone="amber"
           label="Total ganado por clientes"

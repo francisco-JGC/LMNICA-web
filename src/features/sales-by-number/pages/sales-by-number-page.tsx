@@ -7,7 +7,6 @@ import {
   UserRound,
 } from 'lucide-react';
 
-import { getSalesByNumber } from '@/features/sales-by-number/api/sales-by-number.api';
 import { useGames } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { useSalesByNumber } from '@/features/sales-by-number/hooks/use-sales-by-number';
@@ -60,43 +59,57 @@ export function SalesByNumberPage() {
   const { data: games } = useGames();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
-    limit: 200,
+    salePointId: salePointId || undefined,
+    limit: 500,
     offset: 0,
   });
 
-  // Cuando el usuario elige una sucursal, filtramos los vendedores del
-  // dropdown localmente para que solo aparezcan los de esa sucursal —
-  // el backend también aplica el filtro, pero mostrar 0 opciones cuando
-  // se elige una sucursal sin vendedores da mejor UX que un dropdown
-  // ambiguo con vendedores de otras sucursales.
   const sellerOptions = useMemo(() => {
     const all = sellersPage?.items ?? [];
-    const filtered = salePointId
-      ? all.filter((u) => u.salePointId === salePointId)
-      : all;
     return [
       { value: '', label: 'Todos los vendedores' },
-      ...filtered.map((u) => ({ value: u.id, label: u.name })),
+      ...all.map((u) => ({ value: u.id, label: u.name })),
     ];
-  }, [sellersPage, salePointId]);
+  }, [sellersPage]);
+
+  // Cuando no hay sucursal seleccionada el backend devuelve una fila
+  // por (sucursal × número). Las agrupamos aquí para mostrar una sola
+  // fila por número con los montos sumados de todas las sucursales.
+  const aggregatedItems = useMemo(() => {
+    if (salePointId) return items;
+    const map = new Map<string, SalesByNumberRow>();
+    for (const row of items) {
+      const key = `${row.gameId}::${row.label}`;
+      const prev = map.get(key);
+      if (prev) {
+        map.set(key, {
+          ...prev,
+          ticketCount: prev.ticketCount + row.ticketCount,
+          totalAmount: prev.totalAmount + row.totalAmount,
+        });
+      } else {
+        map.set(key, { ...row });
+      }
+    }
+    return Array.from(map.values());
+  }, [items, salePointId]);
 
   const totals = useMemo(() => {
     let totalAmount = 0;
     let ticketCount = 0;
-    for (const r of items) {
+    for (const r of aggregatedItems) {
       totalAmount += r.totalAmount;
       ticketCount += r.ticketCount;
     }
     return { totalAmount, ticketCount };
-  }, [items]);
+  }, [aggregatedItems]);
 
-  const handleExport = async () => {
-    const result = await getSalesByNumber(params);
+  const handleExport = () => {
     downloadXlsx(`ventas-por-numero-${from}-${to}`, [
       {
         name: 'Ventas por Número',
         headers: ['Número', 'Juego', 'Veces vendido', 'Monto total'],
-        rows: result.items.map((r) => [r.label, r.gameName, r.ticketCount, r.totalAmount]),
+        rows: aggregatedItems.map((r) => [r.label, r.gameName, r.ticketCount, r.totalAmount]),
       },
     ]);
   };
@@ -115,7 +128,7 @@ export function SalesByNumberPage() {
             Cuántas veces se vendió cada número y monto total apostado, según
             los filtros. Solo tickets válidos (los anulados no cuentan).
           </p>
-          <ExportButton disabled={items.length === 0} onExport={handleExport} />
+          <ExportButton disabled={aggregatedItems.length === 0} onExport={handleExport} />
         </div>
       </header>
 
@@ -217,7 +230,7 @@ export function SalesByNumberPage() {
             <tbody className="divide-y divide-border/60">
               {isLoading && items.length === 0 ? (
                 Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
-              ) : items.length === 0 ? (
+              ) : aggregatedItems.length === 0 ? (
                 <tr>
                   <td
                     colSpan={4}
@@ -227,7 +240,7 @@ export function SalesByNumberPage() {
                   </td>
                 </tr>
               ) : (
-                items.map((row) => (
+                aggregatedItems.map((row) => (
                   <NumberRow
                     key={`${row.gameId}::${row.label}`}
                     row={row}
@@ -235,11 +248,11 @@ export function SalesByNumberPage() {
                 ))
               )}
             </tbody>
-            {items.length > 0 && (
+            {aggregatedItems.length > 0 && (
               <tfoot className="bg-slate-50/60 text-sm font-bold">
                 <tr>
                   <td className="px-6 py-3.5 text-foreground" colSpan={2}>
-                    Totales ({items.length} números)
+                    Totales ({aggregatedItems.length} números)
                   </td>
                   <td className="px-6 py-3.5 text-right tabular-nums">
                     {totals.ticketCount}
