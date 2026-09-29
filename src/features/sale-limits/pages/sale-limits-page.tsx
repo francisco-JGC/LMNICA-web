@@ -1,158 +1,310 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Copy, Loader2, MapPin, ShieldAlert } from 'lucide-react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Dices,
+  Layers,
+  Loader2,
+  MapPin,
+  ShieldAlert,
+} from 'lucide-react';
 
-import { useGames } from '@/features/games/hooks/use-games';
-import { upsertSaleLimit } from '@/features/sale-limits/api/sale-limits.api';
-import { LimitRow } from '@/features/sale-limits/components/limit-row';
-import { useSaleLimits } from '@/features/sale-limits/hooks/use-sale-limits';
+import { useGameSchedules, useGames } from '@/features/games/hooks/use-games';
+import {
+  saleLimitsByNumberKeys,
+  useDeleteSaleLimitByNumber,
+  useSaleLimitsByNumber,
+  useUpsertSaleLimitByNumber,
+} from '@/features/sale-limits-by-number/hooks/use-sale-limits-by-number';
+import {
+  useDeleteSaleLimit,
+  useSaleLimits,
+  useUpsertSaleLimit,
+} from '@/features/sale-limits/hooks/use-sale-limits';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
+import { useSalesByNumber } from '@/features/sales-by-number/hooks/use-sales-by-number';
+import { endOfDayParam, formatCurrency, formatDrawTimeLabel } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/cn';
+import { Modal } from '@/shared/ui/modal';
 import { Select } from '@/shared/ui/select';
 
+import type { Game } from '@/features/games/types';
 import type { SaleLimit } from '@/features/sale-limits/types';
+import type { SaleLimitByNumber } from '@/features/sale-limits-by-number/types';
 
-/**
- * Redesigned for 50+ sucursales: instead of a wide grid, the operator
- * picks ONE sucursal and edits its per-game limits in a compact vertical
- * list. A "Copiar de otra sucursal" bulk action replicates config between
- * similar sucursales in one click.
- */
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 100;
+
+const MONTHS_ABBR = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'] as const;
+const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] as const;
+const DAYS_PER_MONTH = 31;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isoToday(): string {
+  const d = new Date();
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function generateLabels(game: Game): string[] {
+  switch (game.type) {
+    case 'regular':
+      return Array.from({ length: 100 }, (_, i) => i.toString().padStart(2, '0'));
+    case 'three_digit':
+      return Array.from({ length: 1000 }, (_, i) => i.toString().padStart(3, '0'));
+    case 'four_digit':
+      return Array.from({ length: 10000 }, (_, i) => i.toString().padStart(4, '0'));
+    case 'date': {
+      const labels: string[] = [];
+      for (let m = 0; m < 12; m++) {
+        for (let d = 1; d <= DAYS_PER_MONTH; d++) {
+          labels.push(`${d.toString().padStart(2, '0')} ${MONTHS_ABBR[m]}`);
+        }
+      }
+      return labels;
+    }
+    default:
+      return [];
+  }
+}
+
+/** Convert sales-by-number date label "DD-MM" → "DD mon" used by limits. */
+function normSaleLabel(rawLabel: string, isDate: boolean): string {
+  if (!isDate) return rawLabel;
+  const parts = rawLabel.split('-');
+  if (parts.length !== 2) return rawLabel;
+  const [dd, mm] = parts;
+  const idx = parseInt(mm, 10) - 1;
+  if (idx < 0 || idx > 11) return rawLabel;
+  return `${dd} ${MONTHS_ABBR[idx]}`;
+}
+
+function nowTimeManagua(): string {
+  const d = new Date();
+  const minguaOffset = -6 * 60;
+  const utcMinutes = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const localMinutes = ((utcMinutes + minguaOffset) % (24 * 60) + 24 * 60) % (24 * 60);
+  const hh = Math.floor(localMinutes / 60).toString().padStart(2, '0');
+  const mm = (localMinutes % 60).toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function pickNearestDrawTime(times: string[], now: string): string | null {
+  if (times.length === 0) return null;
+  const upcoming = times.filter((t) => t >= now);
+  return upcoming.length > 0 ? upcoming[0] : null;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export function SaleLimitsPage() {
   const [salePointId, setSalePointId] = useState('');
+  const [activeGameId, setActiveGameId] = useState('');
+  const [drawTime, setDrawTime] = useState<string>('');
+  const today = useMemo(isoToday, []);
 
   const { data: games } = useGames();
   const { data: salePoints, isLoading: loadingSalePoints } = useSalePoints();
-  const { data: limits, isLoading: loadingLimits, error } = useSaleLimits();
+  const { data: limits, isLoading: loadingLimits } = useSaleLimitsByNumber(
+    salePointId || null,
+  );
+  const { data: saleLimits } = useSaleLimits();
+  const { data: schedules } = useGameSchedules(activeGameId || null);
+
+  const drawTimes = useMemo(() => {
+    if (!schedules) return [];
+    return schedules
+      .filter((s) => s.isActive)
+      .map((s) => s.drawTime)
+      .sort();
+  }, [schedules]);
+
+  useEffect(() => {
+    if (drawTimes.length === 0) { setDrawTime(''); return; }
+    const update = () => {
+      const nearest = pickNearestDrawTime(drawTimes, nowTimeManagua());
+      setDrawTime(nearest ?? '');
+    };
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [drawTimes]);
+
+  const salesParams = useMemo(
+    () => ({
+      salePointId: salePointId || undefined,
+      gameId: activeGameId || undefined,
+      from: salePointId ? `${today}T00:00:00-06:00` : undefined,
+      to: salePointId ? endOfDayParam(today) : undefined,
+    }),
+    [salePointId, activeGameId, today],
+  );
+  const { data: salesData } = useSalesByNumber(salesParams);
 
   const gamesActive = useMemo(
-    () => (games ?? []).filter((g) => g.isActive),
+    () => (games ?? []).filter((g) => g.isActive && g.type !== 'multi_sorteo'),
     [games],
   );
+
   const salePointsActive = useMemo(
     () => (salePoints ?? []).filter((sp) => sp.isActive),
     [salePoints],
   );
 
-  const limitByKey = useMemo(() => {
-    const map = new Map<string, SaleLimit>();
+  useEffect(() => {
+    if (!activeGameId && gamesActive.length > 0) {
+      setActiveGameId(gamesActive[0].id);
+    }
+  }, [gamesActive, activeGameId]);
+
+  const handleGameChange = useCallback((gameId: string) => {
+    setActiveGameId(gameId);
+    setDrawTime('');
+  }, []);
+
+  const activeGame = gamesActive.find((g) => g.id === activeGameId) ?? gamesActive[0];
+  const isDate = activeGame?.type === 'date';
+
+  const limitsByLabel = useMemo(() => {
+    const map = new Map<string, SaleLimitByNumber>();
     for (const l of limits ?? []) {
-      map.set(`${l.gameId}|${l.salePointId}`, l);
+      if (l.gameId === activeGame?.id) map.set(l.label, l);
     }
     return map;
-  }, [limits]);
+  }, [limits, activeGame]);
 
-  const currentSalePoint = salePointsActive.find((sp) => sp.id === salePointId);
+  const activeGeneralLimit = useMemo(() => {
+    if (!salePointId || !activeGame) return undefined;
+    return (saleLimits ?? []).find(
+      (l) => l.salePointId === salePointId && l.gameId === activeGame.id,
+    );
+  }, [saleLimits, salePointId, activeGame]);
 
-  // Show count of configured limits per sucursal in the dropdown so the
-  // operator sees which ones already have setup vs. blank slates.
-  const configuredCountBySalePoint = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const l of limits ?? []) {
-      counts.set(l.salePointId, (counts.get(l.salePointId) ?? 0) + 1);
+  const salesByLabel = useMemo(() => {
+    if (!drawTime && drawTimes.length > 0) return new Map<string, number>();
+    const map = new Map<string, number>();
+    for (const row of salesData?.items ?? []) {
+      if (row.gameId !== activeGame?.id) continue;
+      const key = normSaleLabel(row.label, isDate);
+      map.set(key, (map.get(key) ?? 0) + row.totalAmount);
     }
-    return counts;
-  }, [limits]);
+    return map;
+  }, [salesData, activeGame, isDate, drawTime, drawTimes]);
+
+  const labels = useMemo(
+    () => (activeGame ? generateLabels(activeGame) : []),
+    [activeGame],
+  );
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-5 text-muted-foreground" />
-          <h1 className="text-2xl font-black tracking-tight">
-            Límites de Venta
-          </h1>
+          <h1 className="text-2xl font-black tracking-tight">Límites de Venta</h1>
         </div>
         <p className="max-w-md text-xs text-muted-foreground">
-          Tope en córdobas por número por sorteo. Al alcanzarse, ese número
-          queda bloqueado hasta el siguiente sorteo. Se resetea automáticamente.
+          Tope en córdobas por número por sorteo. Al alcanzarse, ese número queda
+          bloqueado hasta el siguiente sorteo. Se resetea automáticamente.
         </p>
       </header>
 
-      {error && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          No se pudieron cargar los límites: {error.message}
-        </div>
-      )}
-
-      <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <label className="space-y-1.5">
-          <span className="block text-xs font-semibold text-muted-foreground">
-            Sucursal
-          </span>
-          <Select
-            value={salePointId}
-            onChange={setSalePointId}
-            leadingIcon={<MapPin className="size-4" />}
-            placeholder={
-              loadingSalePoints
-                ? 'Cargando…'
-                : 'Elegí la sucursal a configurar'
-            }
-            disabled={loadingSalePoints}
-            options={salePointsActive.map((sp) => {
-              const count = configuredCountBySalePoint.get(sp.id) ?? 0;
-              return {
+      {/* Filters + action */}
+      <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-48 flex-1 space-y-1.5">
+            <span className="block text-xs font-semibold text-muted-foreground">
+              Sucursal
+            </span>
+            <Select
+              value={salePointId}
+              onChange={setSalePointId}
+              leadingIcon={<MapPin className="size-4" />}
+              placeholder={loadingSalePoints ? 'Cargando…' : 'Elegí la sucursal'}
+              disabled={loadingSalePoints}
+              options={salePointsActive.map((sp) => ({
                 value: sp.id,
-                label: count > 0 ? `${sp.name}  (${count})` : sp.name,
-              };
-            })}
-          />
-          <span className="block text-[11px] text-muted-foreground/70">
-            El número entre paréntesis indica cuántos juegos tienen límite
-            configurado en esa sucursal.
-          </span>
-        </label>
+                label: sp.name,
+              }))}
+            />
+          </label>
+
+          <label className="min-w-48 flex-1 space-y-1.5">
+            <span className="block text-xs font-semibold text-muted-foreground">
+              Juego
+            </span>
+            <Select
+              value={activeGameId}
+              onChange={handleGameChange}
+              placeholder="Elegí un juego"
+              disabled={!salePointId || gamesActive.length === 0}
+              options={gamesActive.map((g) => ({ value: g.id, label: g.name }))}
+            />
+          </label>
+
+          {activeGameId && drawTimes.length > 0 && (
+            <label className="min-w-36 space-y-1.5">
+              <span className="block text-xs font-semibold text-muted-foreground">
+                Sorteo
+              </span>
+              <Select
+                value={drawTime}
+                onChange={setDrawTime}
+                placeholder="Sorteo"
+                options={drawTimes.map((t) => ({ value: t, label: formatDrawTimeLabel(t) }))}
+              />
+            </label>
+          )}
+
+          {salePointId && activeGame && (
+            <BulkFillButton
+              labels={labels}
+              salePointId={salePointId}
+              gameId={activeGame.id}
+            />
+          )}
+        </div>
       </div>
 
       {!salePointId ? (
         <EmptyState />
       ) : (
-        <div className="rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center justify-between border-b border-border px-6 py-3">
-            <div>
-              <div className="text-sm font-bold text-foreground">
-                {currentSalePoint?.name ?? 'Sucursal'}
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                {gamesActive.length} juegos activos
-              </div>
-            </div>
-            <CopyFromButton
-              targetSalePointId={salePointId}
-              salePoints={salePointsActive}
-              configuredCountBySalePoint={configuredCountBySalePoint}
-              limits={limits ?? []}
-              activeGameIds={gamesActive.map((g) => g.id)}
+        <>
+          {activeGame && (
+            <GameLimitsCard
+              salePointId={salePointId}
+              gameId={activeGame.id}
+              gameName={activeGame.name}
+              existing={activeGeneralLimit}
             />
-          </div>
-
-          {loadingLimits ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              <Loader2 className="mx-auto size-5 animate-spin" />
-            </div>
-          ) : gamesActive.length === 0 ? (
-            <div className="p-14 text-center text-sm text-muted-foreground">
-              Aún no hay juegos activos.
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {gamesActive.map((game) => (
-                <LimitRow
-                  key={game.id}
-                  gameId={game.id}
-                  gameName={game.name}
-                  salePointId={salePointId}
-                  existing={limitByKey.get(`${game.id}|${salePointId}`)}
-                />
-              ))}
-            </ul>
           )}
-        </div>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            {activeGame && (
+              <NumbersTable
+                key={`${salePointId}-${activeGame.id}`}
+                game={activeGame}
+                salePointId={salePointId}
+                labels={labels}
+                limitsByLabel={limitsByLabel}
+                salesByLabel={salesByLabel}
+                loading={loadingLimits}
+              />
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
+
+// ─── EmptyState ───────────────────────────────────────────────────────────────
 
 function EmptyState() {
   return (
@@ -165,143 +317,897 @@ function EmptyState() {
   );
 }
 
-function CopyFromButton({
-  targetSalePointId,
-  salePoints,
-  configuredCountBySalePoint,
-  limits,
-  activeGameIds,
-}: {
-  targetSalePointId: string;
-  salePoints: { id: string; name: string }[];
-  configuredCountBySalePoint: Map<string, number>;
-  limits: SaleLimit[];
-  activeGameIds: string[];
-}) {
-  const [open, setOpen] = useState(false);
-  const [sourceId, setSourceId] = useState('');
-  const [copying, setCopying] = useState(false);
+// ─── GameLimitsCard ───────────────────────────────────────────────────────────
 
-  // Only offer sucursales that have at least one limit configured AND
-  // aren't the target itself.
-  const eligible = useMemo(
-    () =>
-      salePoints.filter(
-        (sp) =>
-          sp.id !== targetSalePointId &&
-          (configuredCountBySalePoint.get(sp.id) ?? 0) > 0,
-      ),
-    [salePoints, configuredCountBySalePoint, targetSalePointId],
+function GameLimitsCard({
+  salePointId,
+  gameId,
+  gameName,
+  existing,
+}: {
+  salePointId: string;
+  gameId: string;
+  gameName: string;
+  existing: SaleLimit | undefined;
+}) {
+  const [draftAmount, setDraftAmount] = useState(
+    existing?.amount != null ? String(existing.amount) : '',
   );
+  const [draftMaxPerTicket, setDraftMaxPerTicket] = useState(
+    existing?.maxPerTicket != null ? String(existing.maxPerTicket) : '',
+  );
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const savedTimer = useRef<number | null>(null);
+  const upsert = useUpsertSaleLimit();
+  const remove = useDeleteSaleLimit();
 
   useEffect(() => {
-    if (!open) setSourceId('');
-  }, [open]);
+    if (status === 'idle') {
+      setDraftAmount(existing?.amount != null ? String(existing.amount) : '');
+      setDraftMaxPerTicket(
+        existing?.maxPerTicket != null ? String(existing.maxPerTicket) : '',
+      );
+    }
+  }, [existing?.amount, existing?.maxPerTicket, status]);
 
-  const handleCopy = async () => {
-    if (!sourceId || copying) return;
-    // Filter to active games only — ignore stale limits from disabled games.
-    const applicable = limits
-      .filter((l) => l.salePointId === sourceId)
-      .filter((l) => activeGameIds.includes(l.gameId));
-    if (applicable.length === 0) {
-      toast.info('La sucursal origen no tiene límites en juegos activos.');
+  useEffect(() => {
+    if (status !== 'saved') return;
+    savedTimer.current = window.setTimeout(() => setStatus('idle'), 1500);
+    return () => { if (savedTimer.current) window.clearTimeout(savedTimer.current); };
+  }, [status]);
+
+  const persist = async () => {
+    const amountStr = draftAmount.trim();
+    const mptStr = draftMaxPerTicket.trim();
+
+    const prevAmount = existing?.amount != null ? String(existing.amount) : '';
+    const prevMpt = existing?.maxPerTicket != null ? String(existing.maxPerTicket) : '';
+
+    if (amountStr === prevAmount && mptStr === prevMpt) return;
+
+    if (amountStr === '') {
+      if (!existing) return;
+      setStatus('saving');
+      try {
+        await remove.mutateAsync(existing.id);
+        setStatus('saved');
+      } catch {
+        setStatus('idle');
+      }
       return;
     }
-    setCopying(true);
+
+    const numAmount = Number(amountStr);
+    if (!Number.isInteger(numAmount) || numAmount < 0) {
+      setDraftAmount(prevAmount);
+      return;
+    }
+
+    const numMpt = mptStr === '' ? null : Number(mptStr);
+    if (numMpt !== null && (!Number.isInteger(numMpt) || numMpt <= 0)) {
+      setDraftMaxPerTicket(prevMpt);
+      return;
+    }
+
+    if (
+      existing &&
+      numAmount === existing.amount &&
+      numMpt === (existing.maxPerTicket ?? null)
+    ) return;
+
+    setStatus('saving');
     try {
-      // PUT is idempotent per (game, sucursal), so order doesn't matter.
-      // Use allSettled so one bad row doesn't sink the batch.
-      const results = await Promise.allSettled(
-        applicable.map((l) =>
-          upsertSaleLimit({
-            gameId: l.gameId,
-            salePointId: targetSalePointId,
-            amount: l.amount,
-          }),
-        ),
-      );
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      if (failed === 0) {
-        toast.success(
-          `Copiados ${applicable.length} límite(s) desde la sucursal origen.`,
-        );
-      } else {
-        toast.warning(
-          `${applicable.length - failed} copiados, ${failed} fallaron.`,
-        );
-      }
-      setOpen(false);
-    } finally {
-      setCopying(false);
+      await upsert.mutateAsync({
+        salePointId,
+        gameId,
+        amount: numAmount,
+        maxPerTicket: numMpt,
+      });
+      setStatus('saved');
+    } catch {
+      setStatus('idle');
     }
   };
 
-  if (eligible.length === 0) return null;
+  const isAmountDirty =
+    (existing?.amount != null ? String(existing.amount) : '') !== draftAmount.trim();
+  const isMptDirty =
+    (existing?.maxPerTicket != null ? String(existing.maxPerTicket) : '') !==
+    draftMaxPerTicket.trim();
 
   return (
-    <div className="relative">
+    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Dices className="size-3.5" strokeWidth={2.4} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{gameName}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {existing
+              ? `Sorteo: ${formatCurrency(existing.amount)}${existing.maxPerTicket != null ? ` · Boleto: ${formatCurrency(existing.maxPerTicket)}` : ''}`
+              : 'Sin límite general'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Máx por sorteo */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Máx. por sorteo
+          </span>
+          <div className="relative w-32">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+              C$
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={draftAmount}
+              onChange={(e) => setDraftAmount(e.target.value)}
+              onBlur={persist}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') {
+                  setDraftAmount(existing?.amount != null ? String(existing.amount) : '');
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder="Sin límite"
+              className={cn(
+                'w-full rounded-md border bg-background py-1.5 pl-9 pr-2 text-right text-sm tabular-nums transition',
+                'placeholder:text-muted-foreground/50 placeholder:font-normal placeholder:text-xs',
+                'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
+                existing && !isAmountDirty
+                  ? 'border-primary/30 bg-primary/5 font-semibold text-primary'
+                  : 'border-border',
+                isAmountDirty && status === 'idle' && 'border-amber-300 bg-amber-50/50',
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Máx por boleto */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Máx. por boleto
+          </span>
+          <div className="relative w-32">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+              C$
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={draftMaxPerTicket}
+              onChange={(e) => setDraftMaxPerTicket(e.target.value)}
+              onBlur={persist}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') {
+                  setDraftMaxPerTicket(
+                    existing?.maxPerTicket != null ? String(existing.maxPerTicket) : '',
+                  );
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder="Sin límite"
+              className={cn(
+                'w-full rounded-md border bg-background py-1.5 pl-9 pr-2 text-right text-sm tabular-nums transition',
+                'placeholder:text-muted-foreground/50 placeholder:font-normal placeholder:text-xs',
+                'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
+                existing?.maxPerTicket != null && !isMptDirty
+                  ? 'border-emerald-200 bg-emerald-50/50 font-semibold text-emerald-900'
+                  : 'border-border',
+                isMptDirty && status === 'idle' && 'border-amber-300 bg-amber-50/50',
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="flex size-7 items-center justify-center mb-0.5">
+          {status === 'saving' && <Loader2 className="size-4 animate-spin text-primary" />}
+          {status === 'saved' && <Check className="size-4 text-emerald-600" strokeWidth={2.8} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NumbersTable ─────────────────────────────────────────────────────────────
+
+function NumbersTable({
+  game,
+  salePointId,
+  labels,
+  limitsByLabel,
+  salesByLabel,
+  loading,
+}: {
+  game: Game;
+  salePointId: string;
+  labels: string[];
+  limitsByLabel: Map<string, SaleLimitByNumber>;
+  salesByLabel: Map<string, number>;
+  loading: boolean;
+}) {
+  const [page, setPage] = useState(0);
+  const needsPaging = labels.length > PAGE_SIZE;
+  const totalPages = Math.ceil(labels.length / PAGE_SIZE);
+
+  const visible = needsPaging
+    ? labels.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+    : labels;
+
+  const rangeStart = page * PAGE_SIZE;
+  const rangeEnd = Math.min(rangeStart + PAGE_SIZE - 1, labels.length - 1);
+
+  if (loading) {
+    return (
+      <div className="py-16 text-center">
+        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (game.type === 'date') {
+    return (
+      <DateTable
+        salePointId={salePointId}
+        gameId={game.id}
+        labels={labels}
+        limitsByLabel={limitsByLabel}
+        salesByLabel={salesByLabel}
+      />
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <TableHead />
+        <tbody className="divide-y divide-border/50">
+          {visible.map((label) => (
+            <NumberRow
+              key={label}
+              label={label}
+              salePointId={salePointId}
+              gameId={game.id}
+              existing={limitsByLabel.get(label)}
+              soldToday={salesByLabel.get(label) ?? 0}
+            />
+          ))}
+        </tbody>
+        {needsPaging && (
+          <tfoot>
+            <tr>
+              <td colSpan={4} className="border-t border-border bg-muted/30 px-4 py-2.5">
+                <TablePagination
+                  page={page}
+                  totalPages={totalPages}
+                  rangeLabel={`${labels[rangeStart]} – ${labels[rangeEnd]}`}
+                  onChange={setPage}
+                />
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+// ─── Shared table header ──────────────────────────────────────────────────────
+
+function TableHead() {
+  return (
+    <thead className="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <tr>
+        <th className="px-6 py-3">Apuesta</th>
+        <th className="px-6 py-3 text-right">Monto actual</th>
+        <th className="px-6 py-3 text-right">Monto máximo</th>
+        <th className="px-6 py-3 text-right">Monto mín</th>
+      </tr>
+    </thead>
+  );
+}
+
+// ─── DateTable ────────────────────────────────────────────────────────────────
+
+function DateTable({
+  salePointId,
+  gameId,
+  labels,
+  limitsByLabel,
+  salesByLabel,
+}: {
+  salePointId: string;
+  gameId: string;
+  labels: string[];
+  limitsByLabel: Map<string, SaleLimitByNumber>;
+  salesByLabel: Map<string, number>;
+}) {
+  const byMonth = useMemo(() => {
+    const groups: string[][] = Array.from({ length: 12 }, () => []);
+    for (const label of labels) {
+      const monthAbbr = label.split(' ')[1];
+      const idx = MONTHS_ABBR.indexOf(monthAbbr as typeof MONTHS_ABBR[number]);
+      if (idx >= 0) groups[idx].push(label);
+    }
+    return groups;
+  }, [labels]);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <TableHead />
+        <tbody className="divide-y divide-border/50">
+          {byMonth.map((monthLabels, mi) =>
+            monthLabels.length === 0 ? null : (
+              <>
+                <tr key={`month-${mi}`} className="bg-muted/20">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground"
+                  >
+                    {MONTHS_FULL[mi]}
+                  </td>
+                </tr>
+                {monthLabels.map((label) => (
+                  <NumberRow
+                    key={label}
+                    label={label}
+                    salePointId={salePointId}
+                    gameId={gameId}
+                    existing={limitsByLabel.get(label)}
+                    soldToday={salesByLabel.get(label) ?? 0}
+                  />
+                ))}
+              </>
+            ),
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── NumberRow ────────────────────────────────────────────────────────────────
+
+type CellStatus = 'idle' | 'saving' | 'saved';
+
+function NumberRow({
+  label,
+  salePointId,
+  gameId,
+  existing,
+  soldToday,
+}: {
+  label: string;
+  salePointId: string;
+  gameId: string;
+  existing: SaleLimitByNumber | undefined;
+  soldToday: number;
+}) {
+  const [draftMax, setDraftMax] = useState(existing ? String(existing.amount) : '');
+  const [draftMin, setDraftMin] = useState(
+    existing?.minAmount != null ? String(existing.minAmount) : '',
+  );
+  const [status, setStatus] = useState<CellStatus>('idle');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const draftMaxRef = useRef(draftMax);
+  const draftMinRef = useRef(draftMin);
+  draftMaxRef.current = draftMax;
+  draftMinRef.current = draftMin;
+
+  const upsert = useUpsertSaleLimitByNumber();
+  const remove = useDeleteSaleLimitByNumber(salePointId);
+
+  useEffect(() => {
+    if (status === 'idle') {
+      setDraftMax(existing ? String(existing.amount) : '');
+      setDraftMin(existing?.minAmount != null ? String(existing.minAmount) : '');
+    }
+  }, [existing, status]);
+
+  useEffect(() => {
+    if (status !== 'saved') return;
+    timerRef.current = setTimeout(() => setStatus('idle'), 1500);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [status]);
+
+  const persist = useCallback(async () => {
+    const maxStr = draftMaxRef.current.trim();
+    const minStr = draftMinRef.current.trim();
+    const prevMax = existing ? String(existing.amount) : '';
+    const prevMin = existing?.minAmount != null ? String(existing.minAmount) : '';
+
+    if (maxStr === prevMax && minStr === prevMin) return;
+
+    if (maxStr === '') {
+      if (!existing) return;
+      setStatus('saving');
+      try {
+        await remove.mutateAsync(existing.id);
+        setStatus('saved');
+      } catch {
+        setStatus('idle');
+      }
+      return;
+    }
+
+    const numMax = Number(maxStr);
+    if (!Number.isInteger(numMax) || numMax <= 0) { setDraftMax(prevMax); return; }
+
+    const numMin = minStr === '' ? null : Number(minStr);
+    if (numMin !== null && (!Number.isInteger(numMin) || numMin <= 0)) {
+      setDraftMin(prevMin);
+      return;
+    }
+
+    setStatus('saving');
+    try {
+      await upsert.mutateAsync({
+        gameId,
+        salePointId,
+        label,
+        amount: numMax,
+        minAmount: numMin,
+      });
+      setStatus('saved');
+    } catch {
+      setStatus('idle');
+    }
+  }, [existing, gameId, salePointId, label, upsert, remove]);
+
+  const hasMax = !!existing;
+  const showMin = hasMax || draftMax.trim() !== '';
+
+  const pct = existing && soldToday > 0 ? soldToday / existing.amount : 0;
+  const soldColor =
+    pct >= 1
+      ? 'text-red-600 font-semibold'
+      : pct >= 0.8
+        ? 'text-amber-600'
+        : 'text-muted-foreground';
+
+  return (
+    <tr className="transition-colors hover:bg-muted/10">
+      <td className="px-6 py-2.5">
+        <span
+          className={cn(
+            'text-sm font-bold tabular-nums',
+            hasMax ? 'text-primary' : 'text-foreground',
+          )}
+        >
+          {label}
+        </span>
+      </td>
+
+      <td
+        className={cn(
+          'px-6 py-2.5 text-right text-sm tabular-nums',
+          soldToday > 0 ? soldColor : 'text-muted-foreground/30',
+        )}
+      >
+        {soldToday > 0 ? formatCurrency(soldToday) : '—'}
+      </td>
+
+      <td className="px-6 py-2.5">
+        <RowInput
+          value={draftMax}
+          onChange={setDraftMax}
+          onBlur={persist}
+          onReset={() => setDraftMax(existing ? String(existing.amount) : '')}
+          status={status}
+          hasValue={hasMax}
+        />
+      </td>
+
+      <td className="px-6 py-2.5">
+        {showMin ? (
+          <RowInput
+            value={draftMin}
+            onChange={setDraftMin}
+            onBlur={persist}
+            onReset={() =>
+              setDraftMin(
+                existing?.minAmount != null ? String(existing.minAmount) : '',
+              )
+            }
+            status="idle"
+            hasValue={hasMax && existing?.minAmount != null}
+            tone="emerald"
+          />
+        ) : (
+          <span className="block text-right text-xs text-muted-foreground/20">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+// ─── RowInput ─────────────────────────────────────────────────────────────────
+
+function RowInput({
+  value,
+  onChange,
+  onBlur,
+  onReset,
+  status,
+  hasValue,
+  tone = 'primary',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur: () => void;
+  onReset: () => void;
+  status: CellStatus;
+  hasValue: boolean;
+  tone?: 'primary' | 'emerald';
+}) {
+  const isPrimary = tone === 'primary';
+  return (
+    <div className="flex justify-end">
+      <div className="relative w-28">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            else if (e.key === 'Escape') {
+              onReset();
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="—"
+          className={cn(
+            'w-full rounded border bg-background py-0.5 pr-6 text-right text-xs tabular-nums',
+            'placeholder:text-muted-foreground/40',
+            'focus:outline-none focus:ring-1 focus:border-primary',
+            isPrimary
+              ? hasValue
+                ? 'border-primary/30 font-semibold text-primary focus:ring-primary/30'
+                : 'border-border text-foreground focus:ring-primary/30'
+              : hasValue
+                ? 'border-emerald-200 font-semibold text-emerald-900 focus:ring-emerald-300/40'
+                : 'border-border text-foreground focus:ring-primary/30',
+          )}
+        />
+        {status !== 'idle' && isPrimary && (
+          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2">
+            {status === 'saving' ? (
+              <Loader2 className="size-3 animate-spin text-primary" />
+            ) : (
+              <Check className="size-3 text-emerald-600" strokeWidth={3} />
+            )}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BulkFillButton ───────────────────────────────────────────────────────────
+
+type BulkTarget = 'max' | 'min' | 'both';
+
+function BulkFillButton({
+  labels,
+  salePointId,
+  gameId,
+}: {
+  labels: string[];
+  salePointId: string;
+  gameId: string;
+}) {
+  const upsert = useUpsertSaleLimitByNumber();
+  const qc = useQueryClient();
+
+  const [open, setOpen] = useState(false);
+  const [allLabels, setAllLabels] = useState(false);
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const [target, setTarget] = useState<BulkTarget>('max');
+  const [amount, setAmount] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState('');
+
+  const applying = progress !== null && progress.done < progress.total;
+
+  const reset = () => {
+    setAllLabels(false);
+    setDesde('');
+    setHasta('');
+    setTarget('max');
+    setAmount('');
+    setMinAmount('');
+    setProgress(null);
+    setError('');
+  };
+
+  const handleClose = () => {
+    if (applying) return;
+    setOpen(false);
+    reset();
+  };
+
+  const handleApply = async () => {
+    setError('');
+
+    const startIdx = allLabels ? 0 : labels.indexOf(desde.trim());
+    const endIdx = allLabels ? labels.length - 1 : labels.indexOf(hasta.trim());
+
+    if (startIdx === -1) { setError('Rango inferior no válido.'); return; }
+    if (endIdx === -1) { setError('Rango superior no válido.'); return; }
+    if (startIdx > endIdx) { setError('El rango inferior debe ser menor o igual al superior.'); return; }
+
+    const needsMax = target === 'max' || target === 'both';
+    const needsMin = target === 'min' || target === 'both';
+
+    const numMax = needsMax ? Number(amount.trim()) : 0;
+    const numMin = needsMin ? Number(minAmount.trim()) : 0;
+
+    if (needsMax && (!Number.isInteger(numMax) || numMax <= 0)) {
+      setError('El monto máximo debe ser un número entero positivo.');
+      return;
+    }
+    if (needsMin && (!Number.isInteger(numMin) || numMin <= 0)) {
+      setError('El monto mínimo debe ser un número entero positivo.');
+      return;
+    }
+
+    const toApply = labels.slice(startIdx, endIdx + 1);
+    setProgress({ done: 0, total: toApply.length });
+
+    const CHUNK = 20;
+    let done = 0;
+    for (let i = 0; i < toApply.length; i += CHUNK) {
+      const chunk = toApply.slice(i, i + CHUNK);
+      await Promise.allSettled(
+        chunk.map((label) =>
+          upsert.mutateAsync({
+            gameId,
+            salePointId,
+            label,
+            amount: needsMax ? numMax : 0,
+            minAmount: needsMin ? numMin : null,
+          }),
+        ),
+      );
+      done += chunk.length;
+      setProgress({ done, total: toApply.length });
+    }
+
+    await qc.refetchQueries({ queryKey: saleLimitsByNumberKeys.list(salePointId) });
+
+    setOpen(false);
+    reset();
+  };
+
+  const inputClass =
+    'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50';
+
+  return (
+    <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
       >
-        <Copy className="size-3.5" strokeWidth={2.4} />
-        Copiar de otra sucursal
+        <Layers className="size-4" strokeWidth={2.4} />
+        Relleno masivo
       </button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-border bg-card p-3 shadow-lg">
-            <div className="mb-2 text-xs font-semibold text-foreground">
-              Copiar límites desde:
-            </div>
-            <Select
-              value={sourceId}
-              onChange={setSourceId}
-              leadingIcon={<MapPin className="size-4" />}
-              placeholder="Elegí la sucursal origen"
-              options={eligible.map((sp) => {
-                const count = configuredCountBySalePoint.get(sp.id) ?? 0;
-                return { value: sp.id, label: `${sp.name}  (${count})` };
-              })}
-            />
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleCopy}
-                disabled={!sourceId || copying}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground',
-                  (!sourceId || copying) && 'cursor-not-allowed opacity-60',
-                )}
-              >
-                {copying ? (
+
+      <Modal
+        open={open}
+        onClose={handleClose}
+        title="Relleno masivo"
+        description="Aplicá montos a un rango de números de una sola vez."
+        size="max-w-sm"
+        footer={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={applying}
+              className="rounded-lg border border-border px-4 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying}
+              className={cn(
+                'inline-flex min-w-[90px] items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground',
+                applying ? 'cursor-not-allowed opacity-60' : 'hover:bg-primary/90',
+              )}
+            >
+              {applying ? (
+                <>
                   <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Copy className="size-3.5" strokeWidth={2.4} />
-                )}
-                Copiar
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground/70">
-              Solo se copian juegos activos. Los valores existentes en esta
-              sucursal serán reemplazados si el juego coincide.
-            </p>
+                  {progress!.done}/{progress!.total}
+                </>
+              ) : (
+                'Aplicar'
+              )}
+            </button>
           </div>
-        </>
-      )}
+        }
+      >
+        <div className="space-y-4">
+          {/* Aplicar tipo */}
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              Aplicar a
+            </span>
+            <div className="flex rounded-lg border border-border overflow-hidden text-sm font-semibold">
+              {(
+                [
+                  { value: 'max', label: 'Máximo' },
+                  { value: 'min', label: 'Mínimo' },
+                  { value: 'both', label: 'Ambos' },
+                ] as { value: BulkTarget; label: string }[]
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTarget(value)}
+                  className={cn(
+                    'flex-1 py-2 text-center transition-colors',
+                    target === value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background text-muted-foreground hover:bg-secondary',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Monto(s) */}
+          <div className={cn('grid gap-3', target === 'both' ? 'grid-cols-2' : 'grid-cols-1')}>
+            {(target === 'max' || target === 'both') && (
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Monto máximo
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="200"
+                  className={inputClass}
+                />
+              </label>
+            )}
+            {(target === 'min' || target === 'both') && (
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Monto mínimo
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(e.target.value)}
+                  placeholder="50"
+                  className={inputClass}
+                />
+              </label>
+            )}
+          </div>
+
+          {/* Todas las apuestas */}
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={allLabels}
+              onChange={(e) => setAllLabels(e.target.checked)}
+              className="size-4 rounded border-border accent-primary"
+            />
+            <span className="text-sm font-medium text-foreground">
+              Aplicar a todas las apuestas
+            </span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+              {labels.length} números
+            </span>
+          </label>
+
+          {/* Rango */}
+          {!allLabels && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Rango inferior
+                </span>
+                <input
+                  type="text"
+                  value={desde}
+                  onChange={(e) => setDesde(e.target.value)}
+                  placeholder={labels[0] ?? '00'}
+                  className={inputClass}
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Rango superior
+                </span>
+                <input
+                  type="text"
+                  value={hasta}
+                  onChange={(e) => setHasta(e.target.value)}
+                  placeholder={labels[labels.length - 1] ?? '99'}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+          )}
+
+          {error && (
+            <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// ─── TablePagination ──────────────────────────────────────────────────────────
+
+function TablePagination({
+  page,
+  totalPages,
+  rangeLabel,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  rangeLabel: string;
+  onChange: (p: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-muted-foreground">
+        <span className="font-mono font-semibold text-foreground">{rangeLabel}</span>
+        {' · '}pág. {page + 1} / {totalPages}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(page - 1)}
+          disabled={page === 0}
+          className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(page + 1)}
+          disabled={page >= totalPages - 1}
+          className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
     </div>
   );
 }
