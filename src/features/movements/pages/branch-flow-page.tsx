@@ -1,65 +1,46 @@
 import { useMemo, useState } from 'react';
 import {
   Activity,
-  ArrowDownRight,
-  ArrowUpRight,
   Calendar,
-  DoorClosed,
-  DoorOpen,
+  Clock,
+  Dices,
   MapPin,
-  Receipt,
-  Scale,
-  Trophy,
-  Wallet,
+  User as UserIcon,
 } from 'lucide-react';
 
-import { getBranchFlow } from '@/features/movements/api/movements.api';
-import { useBranchFlow } from '@/features/movements/hooks/use-branch-flow';
-import { MovementType } from '@/features/movements/types';
+import { useGames, useGameSchedules } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
+import { useSalesByNumber } from '@/features/sales-by-number/hooks/use-sales-by-number';
+import { useUsers } from '@/features/users/hooks/use-users';
+import { UserRole } from '@/features/auth/types';
 import { cn } from '@/shared/lib/cn';
-import { downloadXlsx, fmtDateTime } from '@/shared/lib/export-xlsx';
-import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { endOfDayParam, formatCurrency, formatDrawTimeLabel } from '@/shared/lib/format';
+import { downloadXlsx } from '@/shared/lib/export-xlsx';
 import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
 import { TableLoadingOverlay } from '@/shared/ui/table-loading-overlay';
 
-import type { BranchFlowItem } from '@/features/movements/types';
+import type { DrawSchedule } from '@/features/games/types';
+import type { SalesByNumberRow } from '@/features/sales-by-number/types';
 
-const MANAGUA = 'America/Managua';
-const DATE_TIME_FMT = new Intl.DateTimeFormat('es-NI', {
-  timeZone: MANAGUA,
-  day: '2-digit',
-  month: 'short',
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true,
-});
-const DAY_FMT = new Intl.DateTimeFormat('es-NI', {
-  timeZone: MANAGUA,
-  weekday: 'long',
-  day: '2-digit',
-  month: 'long',
-});
-const DAY_KEY_FMT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: MANAGUA,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+const MANAGUA_OFFSET = '-06:00';
 
-function formatDateTime(iso: string): string {
-  return DATE_TIME_FMT.format(new Date(iso));
-}
+function generateDrawOptions(
+  schedules: DrawSchedule[],
+): Array<{ value: string; label: string }> {
+  const active = schedules.filter((s) => s.isActive);
+  if (active.length === 0) return [];
 
-function formatDay(iso: string): string {
-  const s = DAY_FMT.format(new Date(iso));
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+  const seen = new Set<string>();
+  const options: Array<{ value: string; label: string }> = [];
 
-/** yyyy-mm-dd in Managua tz, used as grouping key for daily headers. */
-function managuaDayKey(iso: string): string {
-  return DAY_KEY_FMT.format(new Date(iso));
+  for (const s of active) {
+    if (seen.has(s.drawTime)) continue;
+    seen.add(s.drawTime);
+    options.push({ value: s.drawTime, label: formatDrawTimeLabel(s.drawTime) });
+  }
+
+  return options.sort((a, b) => a.value.localeCompare(b.value));
 }
 
 function isoDate(d: Date): string {
@@ -69,214 +50,126 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Return the numeric signed contribution of an item to running balance. */
-function signedAmount(item: BranchFlowItem): number {
-  if (item.kind === 'ticket_sale') return item.amount;
-  if (item.kind === 'prize_payout') return -item.amount;
-  // movement
-  switch (item.movementType) {
-    case MovementType.DEPOSIT:
-      return item.amount;
-    case MovementType.EXPENSE:
-    case MovementType.WITHDRAWAL:
-      return -item.amount;
-    default:
-      return 0;
-  }
-}
-
-interface EventMeta {
-  label: string;
-  icon: React.ReactNode;
-  tone: 'emerald' | 'rose' | 'slate' | 'indigo';
-}
-
-function metaFor(item: BranchFlowItem): EventMeta {
-  if (item.kind === 'ticket_sale') {
-    return {
-      label: `Venta ${item.folio ?? ''}`,
-      icon: <Receipt className="size-4" />,
-      tone: 'emerald',
-    };
-  }
-  if (item.kind === 'prize_payout') {
-    return {
-      label: `Premio ${item.folio ?? ''}`,
-      icon: <Trophy className="size-4" />,
-      tone: 'rose',
-    };
-  }
-  switch (item.movementType) {
-    case MovementType.EXPENSE:
-      return {
-        label: 'Gasto',
-        icon: <ArrowDownRight className="size-4" />,
-        tone: 'rose',
-      };
-    case MovementType.DEPOSIT:
-      return {
-        label: 'Depósito',
-        icon: <ArrowUpRight className="size-4" />,
-        tone: 'emerald',
-      };
-    case MovementType.WITHDRAWAL:
-      return {
-        label: 'Retiro',
-        icon: <Wallet className="size-4" />,
-        tone: 'rose',
-      };
-    case MovementType.OPENING:
-      return {
-        label: 'Apertura de caja',
-        icon: <DoorOpen className="size-4" />,
-        tone: 'slate',
-      };
-    case MovementType.CLOSING:
-      return {
-        label: 'Cierre de caja',
-        icon: <DoorClosed className="size-4" />,
-        tone: 'slate',
-      };
-    case MovementType.ADJUSTMENT:
-      return {
-        label: 'Ajuste',
-        icon: <Scale className="size-4" />,
-        tone: 'slate',
-      };
-    default:
-      return {
-        label: 'Movimiento',
-        icon: <Activity className="size-4" />,
-        tone: 'slate',
-      };
-  }
-}
-
-const TONE_CLASSES = {
-  emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20',
-  rose: 'bg-rose-500/10 text-rose-700 ring-rose-500/20',
-  slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20',
-  indigo: 'bg-indigo-500/10 text-indigo-700 ring-indigo-500/20',
-} as const;
-
 export function BranchFlowPage() {
   const [salePointId, setSalePointId] = useState('');
-  const [from, setFrom] = useState(isoDate(new Date()));
-  const [to, setTo] = useState(isoDate(new Date()));
-
-  const params = useMemo(
-    () =>
-      salePointId
-        ? {
-            salePointId,
-            from: from ? `${from}T00:00:00-06:00` : undefined,
-            to: to ? endOfDayParam(to) : undefined,
-          }
-        : null,
-    [salePointId, from, to],
-  );
-
-  const { data, isLoading, isFetching, error } = useBranchFlow(params);
-  const items = data?.items ?? [];
+  const [gameId, setGameId] = useState('');
+  const [drawTime, setDrawTime] = useState('');
+  const [sellerId, setSellerId] = useState('');
+  const [from, setFrom] = useState(() => isoDate(new Date()));
+  const [to, setTo] = useState(() => isoDate(new Date()));
 
   const { data: salePoints } = useSalePoints();
-  const salePointName = useMemo(
-    () => salePoints?.find((sp) => sp.id === salePointId)?.name ?? salePointId,
-    [salePoints, salePointId],
+  const { data: games } = useGames();
+  const { data: schedules } = useGameSchedules(gameId || null);
+  const { data: sellersPage } = useUsers({
+    role: UserRole.SELLER,
+    salePointId: salePointId || undefined,
+    limit: 500,
+    offset: 0,
+  });
+
+  const drawOptions = useMemo(
+    () => generateDrawOptions(schedules ?? []),
+    [schedules],
   );
 
-  const handleExport = async () => {
-    if (!salePointId || !params) return;
-    const result = await getBranchFlow(params);
-    let balance = 0;
-    downloadXlsx(`flujo-${salePointName}-${from}-${to}`, [
-      {
-        name: 'Flujo',
-        headers: ['Fecha/hora', 'Evento', 'Descripción', 'Monto', 'Balance'],
-        rows: result.items.map((item) => {
-          const meta = metaFor(item);
-          const signed = signedAmount(item);
-          balance += signed;
-          return [
-            fmtDateTime(item.at),
-            meta.label,
-            item.description ?? '',
-            item.amount,
-            balance,
-          ];
-        }),
-      },
-    ]);
-  };
+  const sellers = useMemo(
+    () => (sellersPage?.items ?? []).filter((u) => u.isActive),
+    [sellersPage],
+  );
 
-  // Compute running balance + group by Managua day. Balance resets at the
-  // start of the query range (we don't have "opening balance from before").
-  const grouped = useMemo(() => {
-    const groups = new Map<
-      string,
-      { day: string; rows: Array<{ item: BranchFlowItem; balance: number }> }
-    >();
-    let balance = 0;
-    for (const item of items) {
-      balance += signedAmount(item);
-      const key = managuaDayKey(item.at);
-      const bucket = groups.get(key);
-      if (bucket) {
-        bucket.rows.push({ item, balance });
+  const params = useMemo(
+    () => ({
+      salePointId: salePointId || undefined,
+      gameId: gameId || undefined,
+      sellerId: sellerId || undefined,
+      from: from ? `${from}T00:00:00${MANAGUA_OFFSET}` : undefined,
+      to: to ? endOfDayParam(to) : undefined,
+      drawTime: drawTime || undefined,
+    }),
+    [salePointId, gameId, sellerId, from, to, drawTime],
+  );
+
+  const { data, isLoading, isFetching, error } = useSalesByNumber(params);
+
+  const items = useMemo(() => {
+    const rows = data?.items ?? [];
+    const byGameThenLabel = (a: SalesByNumberRow, b: SalesByNumberRow) =>
+      a.gameName.localeCompare(b.gameName, 'es') ||
+      a.label.localeCompare(b.label, 'es', { numeric: true });
+
+    if (salePointId) {
+      return rows
+        .filter((r) => r.salePointId === salePointId)
+        .sort(byGameThenLabel);
+    }
+    const map = new Map<string, SalesByNumberRow>();
+    for (const row of rows) {
+      const key = `${row.gameId}::${row.label}`;
+      const prev = map.get(key);
+      if (prev) {
+        map.set(key, {
+          ...prev,
+          ticketCount: prev.ticketCount + row.ticketCount,
+          totalAmount: prev.totalAmount + row.totalAmount,
+        });
       } else {
-        groups.set(key, { day: item.at, rows: [{ item, balance }] });
+        map.set(key, { ...row });
       }
     }
-    return Array.from(groups.values());
-  }, [items]);
+    return Array.from(map.values()).sort(byGameThenLabel);
+  }, [data, salePointId]);
 
-  const totals = useMemo(() => {
-    let sales = 0;
-    let prizes = 0;
-    let expenses = 0;
-    let deposits = 0;
-    let withdrawals = 0;
-    for (const it of items) {
-      if (it.kind === 'ticket_sale') sales += it.amount;
-      else if (it.kind === 'prize_payout') prizes += it.amount;
-      else if (it.movementType === MovementType.EXPENSE) expenses += it.amount;
-      else if (it.movementType === MovementType.DEPOSIT) deposits += it.amount;
-      else if (it.movementType === MovementType.WITHDRAWAL)
-        withdrawals += it.amount;
-    }
-    const net = sales - prizes + deposits - withdrawals - expenses;
-    return { sales, prizes, expenses, deposits, withdrawals, net };
-  }, [items]);
+  const grandTotal = useMemo(
+    () => items.reduce((acc, r) => acc + r.totalAmount, 0),
+    [items],
+  );
+
+  function handleGameChange(id: string) {
+    setGameId(id);
+    setDrawTime('');
+  }
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className="size-5 text-muted-foreground" />
-          <h1 className="text-2xl font-black tracking-tight">
-            Flujo de Sucursal
-          </h1>
+          <h1 className="text-2xl font-black tracking-tight">Sumatoria</h1>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-muted-foreground">
-            Cronología de eventos con balance corriente
+            Total vendido por número de apuesta
           </p>
-          {salePointId && <ExportButton disabled={items.length === 0} onExport={handleExport} />}
+          <ExportButton
+            disabled={items.length === 0}
+            onExport={() => {
+              const headers = salePointId
+                ? ['Número', 'Juego', 'Sucursal', 'Total Vendido']
+                : ['Número', 'Juego', 'Total Vendido'];
+              const rows = items.map((r) =>
+                salePointId
+                  ? [r.label, r.gameName, r.salePointName, r.totalAmount]
+                  : [r.label, r.gameName, r.totalAmount],
+              );
+              downloadXlsx('sumatoria', [{ name: 'Sumatoria', headers, rows }]);
+            }}
+          />
         </div>
       </header>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Sucursal" required>
+          <Field label="Sucursal">
             <Select
               value={salePointId}
-              onChange={setSalePointId}
+              onChange={(v) => { setSalePointId(v); setSellerId(''); }}
               leadingIcon={<MapPin className="size-4" />}
-              placeholder="Selecciona una sucursal"
-              options={
-                salePoints?.map((sp) => ({ value: sp.id, label: sp.name })) ??
-                []
-              }
+              placeholder="Todas las sucursales"
+              options={[
+                { value: '', label: 'Todas las sucursales' },
+                ...(salePoints?.map((sp) => ({ value: sp.id, label: sp.name })) ?? []),
+              ]}
             />
           </Field>
           <Field label="Desde">
@@ -304,206 +197,159 @@ export function BranchFlowPage() {
             </div>
           </Field>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Juego">
+            <Select
+              value={gameId}
+              onChange={handleGameChange}
+              leadingIcon={<Dices className="size-4" />}
+              placeholder="Todos los juegos"
+              options={[
+                { value: '', label: 'Todos los juegos' },
+                ...(games?.map((g) => ({ value: g.id, label: g.name })) ?? []),
+              ]}
+            />
+          </Field>
+          <Field label="Sorteo">
+            <Select
+              value={drawTime}
+              onChange={setDrawTime}
+              leadingIcon={<Clock className="size-4" />}
+              placeholder={gameId ? 'Todos los sorteos' : 'Selecciona un juego primero'}
+              options={drawOptions}
+              disabled={!gameId}
+            />
+          </Field>
+          <Field label="Vendedor">
+            <Select
+              value={sellerId}
+              onChange={setSellerId}
+              leadingIcon={<UserIcon className="size-4" />}
+              placeholder="Todos los vendedores"
+              options={[
+                { value: '', label: 'Todos los vendedores' },
+                ...sellers.map((u) => ({ value: u.id, label: u.name })),
+              ]}
+            />
+          </Field>
+        </div>
       </div>
 
-      {!salePointId && (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-14 text-center">
-          <MapPin className="mx-auto size-8 text-muted-foreground/40" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            Selecciona una sucursal para ver su flujo cronológico.
-          </p>
-        </div>
-      )}
-
-      {salePointId && error && (
+      {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          No se pudo cargar el flujo: {error.message}
+          No se pudo cargar los datos: {error.message}
         </div>
       )}
 
-      {salePointId && !error && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <MiniStat label="Ventas" value={totals.sales} tone="emerald" />
-            <MiniStat label="Premios" value={totals.prizes} tone="rose" />
-            <MiniStat label="Depósitos" value={totals.deposits} tone="emerald" />
-            <MiniStat label="Gastos + Retiros" value={totals.expenses + totals.withdrawals} tone="rose" />
-            <MiniStat
-              label="Neto"
-              value={totals.net}
-              tone={totals.net >= 0 ? 'indigo' : 'rose'}
-            />
-          </div>
+      {!error && items.length > 0 && (
+        <div className="max-w-xs">
+          <MiniStat label="Total General" value={grandTotal} />
+        </div>
+      )}
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <div className="relative overflow-x-auto">
-              <table
-                className={cn(
-                  'min-w-full text-sm transition-opacity',
-                  isFetching && items.length > 0 && 'opacity-50',
-                )}
-              >
-                <thead className="bg-slate-50/70 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      {!error && (
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="relative overflow-x-auto">
+            <table
+              className={cn(
+                'min-w-full text-sm transition-opacity',
+                isFetching && items.length > 0 && 'opacity-50',
+              )}
+            >
+              <thead className="bg-muted/30 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">Número de Apuesta</th>
+                  <th className="px-4 py-3">Juego</th>
+                  {salePointId && <th className="px-4 py-3">Sucursal</th>}
+                  <th className="px-4 py-3 text-right">Total Vendido</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {isLoading && items.length === 0 ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <SkeletonRow key={i} cols={salePointId ? 4 : 3} />
+                  ))
+                ) : items.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-3">Fecha / hora</th>
-                    <th className="px-6 py-3">Evento</th>
-                    <th className="px-6 py-3">Descripción</th>
-                    <th className="px-6 py-3 text-right">Monto</th>
-                    <th className="px-6 py-3 text-right">Balance</th>
+                    <td
+                      colSpan={salePointId ? 4 : 3}
+                      className="px-4 py-14 text-center text-sm text-muted-foreground"
+                    >
+                      Sin ventas en el rango seleccionado.
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {isLoading && items.length === 0 ? (
-                    Array.from({ length: 6 }).map((_, i) => (
-                      <SkeletonRow key={i} />
-                    ))
-                  ) : items.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-6 py-14 text-center text-sm text-muted-foreground"
-                      >
-                        Sin eventos en este rango.
+                ) : (
+                  items.map((row) => (
+                    <tr
+                      key={`${row.gameId}-${row.label}`}
+                      className="hover:bg-muted/10"
+                    >
+                      <td className="px-4 py-3 font-semibold tabular-nums">
+                        {row.label}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {row.gameName}
+                      </td>
+                      {salePointId && (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {row.salePointName}
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700">
+                        {formatCurrency(row.totalAmount)}
                       </td>
                     </tr>
-                  ) : (
-                    grouped.map((group) => (
-                      <DayGroup
-                        key={managuaDayKey(group.day)}
-                        day={group.day}
-                        rows={group.rows}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
+                  ))
+                )}
+              </tbody>
+              {items.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-border bg-muted/30">
+                    <td
+                      className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted-foreground"
+                      colSpan={salePointId ? 3 : 2}
+                    >
+                      Total ({items.length} número{items.length !== 1 ? 's' : ''})
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-base font-black text-emerald-800">
+                      {formatCurrency(grandTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
 
-              <TableLoadingOverlay show={isFetching && items.length > 0} />
-            </div>
+            <TableLoadingOverlay show={isFetching && items.length > 0} />
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-function DayGroup({
-  day,
-  rows,
-}: {
-  day: string;
-  rows: Array<{ item: BranchFlowItem; balance: number }>;
-}) {
-  return (
-    <>
-      <tr className="bg-slate-50/60">
-        <td
-          colSpan={5}
-          className="px-6 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground"
-        >
-          {formatDay(day)}
-        </td>
-      </tr>
-      {rows.map(({ item, balance }) => (
-        <FlowRow key={item.refId + item.kind} item={item} balance={balance} />
-      ))}
-    </>
-  );
-}
-
-function FlowRow({
-  item,
-  balance,
-}: {
-  item: BranchFlowItem;
-  balance: number;
-}) {
-  const meta = metaFor(item);
-  const signed = signedAmount(item);
-  const amountColor =
-    signed > 0
-      ? 'text-emerald-700'
-      : signed < 0
-        ? 'text-rose-700'
-        : 'text-foreground';
-  const sign = signed > 0 ? '+' : signed < 0 ? '−' : '';
-  return (
-    <tr className="hover:bg-slate-50/60">
-      <td className="px-6 py-3.5 text-muted-foreground tabular-nums">
-        {formatDateTime(item.at)}
-      </td>
-      <td className="px-6 py-3.5">
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset',
-            TONE_CLASSES[meta.tone],
-          )}
-        >
-          {meta.icon}
-          {meta.label}
-        </span>
-      </td>
-      <td className="max-w-md truncate px-6 py-3.5 text-muted-foreground">
-        {item.description || (
-          <span className="text-muted-foreground/50">—</span>
-        )}
-      </td>
-      <td
-        className={cn(
-          'px-6 py-3.5 text-right tabular-nums font-semibold',
-          amountColor,
-        )}
-      >
-        {sign}
-        {formatCurrency(item.amount)}
-      </td>
-      <td
-        className={cn(
-          'px-6 py-3.5 text-right tabular-nums font-bold',
-          balance >= 0 ? 'text-indigo-700' : 'text-rose-700',
-        )}
-      >
-        {formatCurrency(balance)}
-      </td>
-    </tr>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'emerald' | 'rose' | 'indigo';
-}) {
-  const valueColor = {
-    emerald: 'text-emerald-800',
-    rose: 'text-rose-800',
-    indigo: 'text-indigo-800',
-  }[tone];
-  return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className={cn('mt-1 text-lg font-black tabular-nums', valueColor)}>
-        {formatCurrency(value)}
-      </div>
-    </div>
-  );
-}
-
-function SkeletonRow() {
+function SkeletonRow({ cols = 3 }: { cols?: number }) {
   return (
     <tr>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <td key={i} className="px-6 py-4">
+      {Array.from({ length: cols }).map((_, i) => (
+        <td key={i} className="px-4 py-4">
           <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
         </td>
       ))}
     </tr>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 text-xl font-black tabular-nums text-emerald-800">
+        {formatCurrency(value)}
+      </div>
+    </div>
   );
 }
 
