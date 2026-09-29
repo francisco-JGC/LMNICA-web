@@ -39,7 +39,6 @@ import { TableLoadingOverlay } from '@/shared/ui/table-loading-overlay';
 
 import type { Movement } from '@/features/movements/types';
 import type { SalePoint } from '@/features/sale-points/types';
-import type { User } from '@/features/users/types';
 
 const PAGE_SIZE = 20;
 
@@ -100,15 +99,17 @@ const TYPE_META: Record<
 
 /** Override labels for seller-level movements (sellerId != null). */
 const SELLER_TYPE_META: Partial<Record<MovementType, { label: string; classes: string; icon: React.ReactNode }>> = {
+  // Cobro: admin cobra al vendedor → resta de su saldo → rojo
   [MovementType.DEPOSIT]: {
     label: 'Cobro',
+    classes: 'bg-rose-500/10 text-rose-700 ring-rose-500/20',
+    icon: <ArrowDownRight className="size-3" strokeWidth={2.6} />,
+  },
+  // Ajuste de premio: admin da crédito al vendedor → suma a su saldo → verde
+  [MovementType.WITHDRAWAL]: {
+    label: 'Ajuste de premio',
     classes: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20',
     icon: <ArrowUpRight className="size-3" strokeWidth={2.6} />,
-  },
-  [MovementType.WITHDRAWAL]: {
-    label: 'Crédito',
-    classes: 'bg-blue-500/10 text-blue-700 ring-blue-500/20',
-    icon: <Wallet className="size-3" strokeWidth={2.6} />,
   },
 };
 
@@ -117,6 +118,20 @@ const TYPE_SIGN: Record<MovementType, '+' | '-' | ''> = {
   [MovementType.EXPENSE]: '-',
   [MovementType.DEPOSIT]: '+',
   [MovementType.WITHDRAWAL]: '-',
+  [MovementType.OPENING]: '',
+  [MovementType.CLOSING]: '',
+  [MovementType.ADJUSTMENT]: '',
+};
+
+/**
+ * Sign for seller-level movements — inverted vs branch:
+ * - Cobro (DEPOSIT): admin cobra al vendedor → resta de su saldo → '-'
+ * - Ajuste de premio (WITHDRAWAL): admin da crédito al vendedor → suma → '+'
+ */
+const SELLER_TYPE_SIGN: Record<MovementType, '+' | '-' | ''> = {
+  [MovementType.EXPENSE]: '-',
+  [MovementType.DEPOSIT]: '-',
+  [MovementType.WITHDRAWAL]: '+',
   [MovementType.OPENING]: '',
   [MovementType.CLOSING]: '',
   [MovementType.ADJUSTMENT]: '',
@@ -150,19 +165,26 @@ export function MovementsPage() {
   const total = data?.total ?? 0;
 
   const { data: salePoints } = useSalePoints();
-  const { data: usersPage } = useUsers({ limit: 200, offset: 0 });
-  const { data: sellersPage } = useUsers({ role: UserRole.SELLER, limit: 200, offset: 0 });
+  const { data: sellersPage } = useUsers({
+    role: UserRole.SELLER,
+    salePointId: salePointId || undefined,
+    limit: 500,
+    offset: 0,
+  });
+
+  const sellerOptions = useMemo(() => {
+    const all = (sellersPage?.items ?? []).filter((u) => u.isActive);
+    return [
+      { value: '', label: 'Todos los vendedores' },
+      ...all.map((u) => ({ value: u.id, label: u.name })),
+    ];
+  }, [sellersPage]);
 
   const salePointById = useMemo(() => {
     const m = new Map<string, SalePoint>();
     for (const sp of salePoints ?? []) m.set(sp.id, sp);
     return m;
   }, [salePoints]);
-  const userById = useMemo(() => {
-    const m = new Map<string, User>();
-    for (const u of usersPage?.items ?? []) m.set(u.id, u);
-    return m;
-  }, [usersPage]);
 
   const rangeStart = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const rangeEnd = Math.min(total, (page + 1) * PAGE_SIZE);
@@ -173,24 +195,28 @@ export function MovementsPage() {
 
   const handleExport = async () => {
     const all = await listMovements({ ...params, page: 1, limit: 5000 });
-    downloadXlsx('movimientos', [
-      {
-        name: 'Movimientos',
-        headers: ['Fecha', 'Destino', 'Tipo', 'Descripción', 'Monto', 'Registrado por'],
-        rows: all.items.map((m) => [
+    downloadXlsx('movimientos', [{
+      name: 'Movimientos',
+      headers: ['Fecha', 'Destino', 'Tipo', 'Es Premio', 'Monto', 'Descripción', 'Creado por'],
+      rows: all.items.map((m) => {
+        const isSeller = m.sellerId != null;
+        const dest = isSeller
+          ? (m.sellerName ?? '—')
+          : (salePointById.get(m.salePointId ?? '')?.name ?? '—');
+        const typeMeta = isSeller
+          ? (SELLER_TYPE_META[m.type] ?? TYPE_META[m.type])
+          : TYPE_META[m.type];
+        return [
           fmtDate(m.occurredAt),
-          m.sellerId
-            ? userById.get(m.sellerId)?.name ?? m.sellerId
-            : salePointById.get(m.salePointId ?? '')?.name ?? '—',
-          m.sellerId
-            ? (SELLER_TYPE_META[m.type]?.label ?? TYPE_META[m.type].label)
-            : TYPE_META[m.type].label,
-          m.description ?? '',
+          dest,
+          typeMeta.label,
+          m.isPrizePayment ? 'Sí' : 'No',
           m.amount,
-          m.createdById ? userById.get(m.createdById)?.name ?? '—' : '—',
-        ]),
-      },
-    ]);
+          m.description || '',
+          m.createdByName ?? '',
+        ];
+      }),
+    }]);
   };
 
   return (
@@ -244,13 +270,7 @@ export function MovementsPage() {
               }}
               leadingIcon={<UserIcon className="size-4" />}
               placeholder="Todos"
-              options={[
-                { value: '', label: 'Todos los vendedores' },
-                ...(sellersPage?.items.map((u) => ({
-                  value: u.id,
-                  label: u.name,
-                })) ?? []),
-              ]}
+              options={sellerOptions}
             />
           </Field>
           <Field label="Tipo">
@@ -266,7 +286,7 @@ export function MovementsPage() {
                 { value: '', label: 'Todos los tipos' },
                 { value: MovementType.EXPENSE, label: 'Gasto' },
                 { value: MovementType.DEPOSIT, label: 'Depósito / Cobro' },
-                { value: MovementType.WITHDRAWAL, label: 'Retiro / Crédito' },
+                { value: MovementType.WITHDRAWAL, label: 'Retiro / Ajuste de premio' },
                 { value: MovementType.ADJUSTMENT, label: 'Ajuste' },
               ]}
             />
@@ -350,15 +370,11 @@ export function MovementsPage() {
                     movement={m}
                     destinationName={
                       m.sellerId
-                        ? userById.get(m.sellerId)?.name ?? '—'
+                        ? (m.sellerName ?? '—')
                         : salePointById.get(m.salePointId ?? '')?.name ?? '—'
                     }
                     destinationKind={m.sellerId ? 'seller' : 'branch'}
-                    createdByName={
-                      m.createdById
-                        ? userById.get(m.createdById)?.name ?? '—'
-                        : '—'
-                    }
+                    createdByName={m.createdByName ?? '—'}
                     onEdit={() => setEditMovement(m)}
                     onDelete={() => deleteMovement.mutate(m.id)}
                     deleting={
@@ -455,7 +471,7 @@ function MovementRow({
     isSeller
       ? (SELLER_TYPE_META[movement.type] ?? TYPE_META[movement.type])
       : TYPE_META[movement.type];
-  const sign = TYPE_SIGN[movement.type];
+  const sign = isSeller ? SELLER_TYPE_SIGN[movement.type] : TYPE_SIGN[movement.type];
   const amountColor =
     sign === '+'
       ? 'text-emerald-700'

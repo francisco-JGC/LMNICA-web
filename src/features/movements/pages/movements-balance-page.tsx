@@ -7,13 +7,13 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  Clock,
   Dices,
   Handshake,
   History,
   MapPin,
   Share2,
   Sigma,
-  Timer,
   TrendingDown,
   TrendingUp,
   User,
@@ -85,6 +85,19 @@ export function MovementsBalancePage() {
   const [to, setTo] = useState(isoDate(new Date()));
   const [showSalary, setShowSalary] = useState(false);
 
+  const { data: games } = useGames(true);
+  const { data: schedules } = useGameSchedules(gameId || null);
+
+  const drawOptions = useMemo(
+    () => generateDrawOptions(schedules ?? []),
+    [schedules],
+  );
+
+  function handleGameChange(id: string) {
+    setGameId(id);
+    setDrawTime('');
+  }
+
   const rangeParams = useMemo(
     () => ({
       salePointIds: salePointIds.length > 0 ? salePointIds : undefined,
@@ -98,6 +111,8 @@ export function MovementsBalancePage() {
 
   // 600ms debounce — when the user clicks through dates quickly only ONE
   // request fires (after they stop), instead of one per intermediate date.
+  // The UI (FiltersBar) still updates instantly from rangeParams; the
+  // queries wait for the debounced copy.
   const debouncedParams = useDebounce(rangeParams, 600);
 
   const balanceQuery = useMovementsBalance(debouncedParams);
@@ -105,13 +120,6 @@ export function MovementsBalancePage() {
   const sellerBalanceQuery = useSellerMovementsBalance(debouncedParams);
 
   const { data: salePoints } = useSalePoints();
-  const { data: games } = useGames(true);
-  const { data: schedules } = useGameSchedules(gameId || null);
-
-  const drawOptions = useMemo(
-    () => generateDrawOptions(schedules ?? []),
-    [schedules],
-  );
 
   const balanceRows = balanceQuery.data?.items ?? [];
   const allSellerRows = sellerQuery.data?.items ?? [];
@@ -149,7 +157,7 @@ export function MovementsBalancePage() {
           name: r.sellerName,
         }))}
         gameId={gameId}
-        onGameChange={(v) => { setGameId(v); setDrawTime(''); }}
+        onGameChange={handleGameChange}
         games={games ?? []}
         drawTime={drawTime}
         onDrawTimeChange={setDrawTime}
@@ -308,25 +316,22 @@ function FiltersBar({
           <DateField value={to} min={from} onChange={onToChange} />
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Juego">
           <Select
             value={gameId}
             onChange={onGameChange}
             leadingIcon={<Dices className="size-4" />}
-            placeholder="Todos"
-            options={[
-              { value: '', label: 'Todos los juegos' },
-              ...games.map((g) => ({ value: g.id, label: g.name })),
-            ]}
+            placeholder="Todos los juegos"
+            options={games.map((g) => ({ value: g.id, label: g.name }))}
           />
         </Field>
         <Field label="Sorteo">
           <Select
             value={drawTime}
             onChange={onDrawTimeChange}
-            leadingIcon={<Timer className="size-4" />}
-            placeholder={gameId ? 'Todos los sorteos' : 'Elige un juego'}
+            leadingIcon={<Clock className="size-4" />}
+            placeholder={gameId ? 'Todos los sorteos' : 'Selecciona un juego primero'}
             disabled={!gameId}
             options={drawOptions}
           />
@@ -483,8 +488,8 @@ function BranchSummaryCard({
           value={totals.wonPrize}
           tone="rose"
         />
-        <Stat label="Depósitos" value={totals.deposits} tone="emerald" />
-        <Stat label="Retiros" value={totals.withdrawals} tone="rose" />
+        <Stat label="Cobros" value={totals.deposits} tone="rose" hint="Resta el restante" />
+        <Stat label="Ajustes de premio" value={totals.withdrawals} tone="emerald" hint="Suma al restante" />
         <Stat
           label="Gastos"
           value={totals.expenses}
@@ -496,6 +501,7 @@ function BranchSummaryCard({
             label="Salarios encargados"
             value={totals.partnerSalary}
             tone="indigo"
+            className="col-span-2"
           />
         )}
       </dl>
@@ -513,7 +519,9 @@ function BranchSummaryCard({
         <span className="flex items-center gap-1.5">
           <History className="size-3" strokeWidth={2.4} />
           Historial de movimientos
-          {hasMovements && <span className="size-1.5 rounded-full bg-current" />}
+          {hasMovements && (
+            <span className="size-1.5 rounded-full bg-current" />
+          )}
         </span>
         {showHistory
           ? <ChevronUp className="size-3.5" strokeWidth={2.4} />
@@ -541,8 +549,8 @@ function BranchCard({
   // restante — el backend siempre lo mete en `row.net`, así que sumamos
   // de vuelta cuando el toggle está en OFF.
   const effectiveNet = showSalary
-    ? row.net
-    : row.net + (row.partnerSalary ?? 0);
+    ? (row.net ?? 0)
+    : (row.net ?? 0) + (row.partnerSalary ?? 0);
   const isPositive = effectiveNet >= 0;
   const hasMovements = (row.deposits ?? 0) > 0 || (row.withdrawals ?? 0) > 0 || (row.expenses ?? 0) > 0;
   // Sólo mostramos salario del encargado si hay % configurado en la
@@ -596,8 +604,8 @@ function BranchCard({
           value={row.wonPrize}
           tone="rose"
         />
-        <Stat label="Depósitos" value={row.deposits} tone="emerald" />
-        <Stat label="Retiros" value={row.withdrawals} tone="rose" />
+        <Stat label="Cobros" value={row.deposits ?? 0} tone="rose" hint="Resta el restante" />
+        <Stat label="Ajustes de premio" value={row.withdrawals ?? 0} tone="emerald" hint="Suma al restante" />
         <Stat
           label="Gastos"
           value={row.expenses}
@@ -609,6 +617,7 @@ function BranchCard({
             label={`Salario encargado (${row.partnerPaymentPercentage}%)`}
             value={row.partnerSalary ?? 0}
             tone="indigo"
+            className="col-span-2"
             hint={
               row.ownerPartnerName
                 ? `Para ${row.ownerPartnerName}`
@@ -690,7 +699,7 @@ function SellerCards({
 
 const MOVEMENT_LABEL: Record<string, string> = {
   [MovementType.DEPOSIT]: 'Cobro',
-  [MovementType.WITHDRAWAL]: 'Crédito',
+  [MovementType.WITHDRAWAL]: 'Ajuste de premio',
   [MovementType.ADJUSTMENT]: 'Ajuste',
   [MovementType.EXPENSE]: 'Gasto',
   [MovementType.OPENING]: 'Apertura de caja',
@@ -804,7 +813,8 @@ function MovementsSection({ sellerId, from, to }: { sellerId: string; from?: str
 
 function MovementItem({ movement }: { movement: Movement }) {
   const label = MOVEMENT_LABEL[movement.type] ?? movement.type;
-  const isPositive = movement.type === MovementType.DEPOSIT;
+  // Desde la perspectiva del vendedor: Cobro (DEPOSIT) resta, Ajuste de premio (WITHDRAWAL) suma.
+  const isPositive = movement.type === MovementType.WITHDRAWAL;
   const amountClass = isPositive ? 'text-emerald-700' : 'text-rose-700';
   const sign = isPositive ? '+' : '−';
   return (
@@ -816,6 +826,7 @@ function MovementItem({ movement }: { movement: Movement }) {
             ? 'bg-emerald-50 text-emerald-700 ring-emerald-500/20'
             : 'bg-rose-50 text-rose-700 ring-rose-500/20',
         )}
+        title={isPositive ? 'Suma al vendedor' : 'Resta al vendedor'}
       >
         {label}
       </span>
@@ -854,6 +865,7 @@ function SellerCard({
   const net = row.billed - row.wonPrize - salary - cobros + credits;
   const isPositive = net >= 0;
   const hasCobros = cobros > 0 || credits > 0;
+  const hasMovements = cobros > 0 || credits > 0 || prizePayments > 0;
   return (
     <article
       ref={cardRef}
@@ -907,16 +919,16 @@ function SellerCard({
           <Stat
             label="Cobrado"
             value={cobros}
-            tone="emerald"
-            hint="Dinero recibido del vendedor"
+            tone="rose"
+            hint="Resta el pendiente"
           />
         )}
         {credits > 0 && (
           <Stat
-            label="Créditos al vendedor"
+            label="Ajuste de premio"
             value={credits}
-            tone="rose"
-            hint="Devolución o ajuste a favor"
+            tone="emerald"
+            hint="Suma al pendiente"
           />
         )}
         {prizePayments > 0 && (
@@ -935,11 +947,19 @@ function SellerCard({
         type="button"
         data-share-hide="true"
         onClick={() => setShowHistory((v) => !v)}
-        className="mt-4 flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold text-muted-foreground hover:bg-muted/60 transition"
+        className={cn(
+          'mt-4 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-[11px] font-semibold transition',
+          hasMovements
+            ? 'border-indigo-300/60 bg-indigo-50/70 text-indigo-700 hover:bg-indigo-100/70'
+            : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60',
+        )}
       >
         <span className="flex items-center gap-1.5">
           <History className="size-3" strokeWidth={2.4} />
           Historial de movimientos
+          {hasMovements && (
+            <span className="size-1.5 rounded-full bg-current" />
+          )}
         </span>
         {showHistory
           ? <ChevronUp className="size-3.5" strokeWidth={2.4} />
