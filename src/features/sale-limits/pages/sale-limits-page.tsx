@@ -270,6 +270,7 @@ export function SaleLimitsPage() {
               labels={labels}
               salePointId={salePointId}
               gameId={activeGame.id}
+              limitsByLabel={limitsByLabel}
             />
           )}
         </div>
@@ -908,10 +909,12 @@ function BulkFillButton({
   labels,
   salePointId,
   gameId,
+  limitsByLabel,
 }: {
   labels: string[];
   salePointId: string;
   gameId: string;
+  limitsByLabel: Map<string, SaleLimitByNumber>;
 }) {
   const upsert = useUpsertSaleLimitByNumber();
   const qc = useQueryClient();
@@ -970,7 +973,18 @@ function BulkFillButton({
       return;
     }
 
-    const toApply = labels.slice(startIdx, endIdx + 1);
+    const allToApply = labels.slice(startIdx, endIdx + 1);
+    // Para "solo mínimo": solo se puede actualizar filas que ya tienen un máximo
+    // configurado, porque `amount` siempre es obligatorio en el backend.
+    const toApply = !needsMax
+      ? allToApply.filter((l) => limitsByLabel.has(l))
+      : allToApply;
+
+    if (toApply.length === 0) {
+      setError('No hay números en ese rango con un máximo configurado. Usá "Ambos" para crear nuevos límites.');
+      return;
+    }
+
     setProgress({ done: 0, total: toApply.length });
 
     const CHUNK = 20;
@@ -983,7 +997,7 @@ function BulkFillButton({
             gameId,
             salePointId,
             label,
-            amount: needsMax ? numMax : 0,
+            amount: needsMax ? numMax : limitsByLabel.get(label)!.amount,
             minAmount: needsMin ? numMin : null,
           }),
         ),
