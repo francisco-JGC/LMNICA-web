@@ -143,8 +143,9 @@ export function SaleLimitsPage() {
       gameId: activeGameId || undefined,
       from: salePointId ? `${today}T00:00:00-06:00` : undefined,
       to: salePointId ? endOfDayParam(today) : undefined,
+      drawTime: drawTime || undefined,
     }),
-    [salePointId, activeGameId, today],
+    [salePointId, activeGameId, today, drawTime],
   );
   const { data: salesData } = useSalesByNumber(salesParams);
 
