@@ -37,10 +37,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   user: User | null;
+  startEditing?: boolean;
 }
 
 interface FormState {
   name: string;
+  username: string;
   password: string;
   role: UserRole;
   paymentPercentage: string;
@@ -53,6 +55,7 @@ interface FormState {
 function stateFromUser(user: User): FormState {
   return {
     name: user.name,
+    username: user.username,
     password: '',
     role: user.role,
     paymentPercentage:
@@ -71,7 +74,7 @@ type TransferMode =
   | 'sync-confirm'
   | 'sync-executing';
 
-export function UserDetailsModal({ open, onClose, user }: Props) {
+export function UserDetailsModal({ open, onClose, user, startEditing }: Props) {
   const session = useSession();
   const isAdmin = session?.user.role === UserRole.ADMIN;
   const canEditRole = isAdmin;
@@ -103,7 +106,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
   useEffect(() => {
     if (open && user) {
       setForm(stateFromUser(user));
-      setEditing(false);
+      setEditing(!!startEditing);
       setTransferMode('idle');
       setNewSalePointId('');
       setTxProgress(0);
@@ -111,7 +114,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
       setShowPassword(false);
       reset();
     }
-  }, [open, user, reset]);
+  }, [open, user, reset, startEditing]);
 
   // Animated progress bar while a transfer or sync runs.
   useEffect(() => {
@@ -174,6 +177,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
 
   const trimmed = {
     name: form.name.trim(),
+    username: form.username.trim(),
     phone: form.phone.trim(),
     address: form.address.trim(),
     nationalId: form.nationalId.trim(),
@@ -183,7 +187,8 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
     form.paymentPercentage === '' ||
     (Number.isInteger(parsedPct) && parsedPct >= 0 && parsedPct <= 100);
   const pwdValid = form.password === '' || form.password.length >= 6;
-  const isValid = trimmed.name.length > 0 && pctValid && pwdValid;
+  const usernameValid = trimmed.username.length >= 3;
+  const isValid = trimmed.name.length > 0 && pctValid && pwdValid && usernameValid;
 
   const handleGenerate = () => {
     set('password', generatePassword());
@@ -201,6 +206,7 @@ export function UserDetailsModal({ open, onClose, user }: Props) {
       id: user.id,
       payload: {
         name: trimmed.name !== user.name ? trimmed.name : undefined,
+        username: trimmed.username !== user.username ? trimmed.username : undefined,
         role: form.role !== user.role ? form.role : undefined,
         password: form.password ? form.password : undefined,
         phone: diffNullable(trimmed.phone, user.phone),
@@ -756,6 +762,17 @@ function EditForm({
           value={form.name}
           onChange={(e) => onChange('name', e.target.value)}
           maxLength={120}
+          className={inputClass}
+        />
+      </Field>
+
+      <Field label="Usuario de inicio de sesión" required>
+        <input
+          type="text"
+          value={form.username}
+          onChange={(e) => onChange('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
+          maxLength={40}
+          autoComplete="off"
           className={inputClass}
         />
       </Field>

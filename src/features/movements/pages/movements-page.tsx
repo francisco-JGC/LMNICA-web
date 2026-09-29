@@ -18,12 +18,15 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { listMovements } from '@/features/movements/api/movements.api';
 import { CreateMovementModal } from '@/features/movements/components/create-movement-modal';
 import { EditMovementModal } from '@/features/movements/components/edit-movement-modal';
 import {
   useDeleteMovement,
   useMovements,
 } from '@/features/movements/hooks/use-movements';
+import { downloadXlsx, fmtDate } from '@/shared/lib/export-xlsx';
+import { ExportButton } from '@/shared/ui/export-button';
 import { MovementType } from '@/features/movements/types';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { useUsers } from '@/features/users/hooks/use-users';
@@ -168,6 +171,28 @@ export function MovementsPage() {
 
   const deleteMovement = useDeleteMovement();
 
+  const handleExport = async () => {
+    const all = await listMovements({ ...params, page: 1, limit: 5000 });
+    downloadXlsx('movimientos', [
+      {
+        name: 'Movimientos',
+        headers: ['Fecha', 'Destino', 'Tipo', 'Descripción', 'Monto', 'Registrado por'],
+        rows: all.items.map((m) => [
+          fmtDate(m.occurredAt),
+          m.sellerId
+            ? userById.get(m.sellerId)?.name ?? m.sellerId
+            : salePointById.get(m.salePointId ?? '')?.name ?? '—',
+          m.sellerId
+            ? (SELLER_TYPE_META[m.type]?.label ?? TYPE_META[m.type].label)
+            : TYPE_META[m.type].label,
+          m.description ?? '',
+          m.amount,
+          m.createdById ? userById.get(m.createdById)?.name ?? '—' : '—',
+        ]),
+      },
+    ]);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -175,14 +200,17 @@ export function MovementsPage() {
           <ListChecks className="size-5 text-muted-foreground" />
           <h1 className="text-2xl font-black tracking-tight">Movimientos</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="size-4" strokeWidth={2.8} />
-          Nuevo movimiento
-        </button>
+        <div className="flex items-center gap-2">
+          <ExportButton disabled={total === 0} onExport={handleExport} />
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="size-4" strokeWidth={2.8} />
+            Nuevo movimiento
+          </button>
+        </div>
       </header>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">

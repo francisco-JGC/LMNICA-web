@@ -10,6 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 
+import { ExpandableKpiCard } from '@/features/home/components/expandable-kpi-card';
 import { GamesBreakdown } from '@/features/home/components/games-breakdown';
 import {
   KpiCard,
@@ -89,21 +90,25 @@ export function HomePage() {
       {data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <KpiCard
+            <ExpandableKpiCard
               label={`Facturado ${suffix}`}
               value={formatCurrency(data.billed)}
               icon={CircleDollarSign}
               tone="emerald"
               hint={deltaHint}
               delta={pctDelta(data.billed, data.billedPrev, 'up')}
+              breakdown={data.byGame}
+              breakdownKey="billed"
             />
-            <KpiCard
+            <ExpandableKpiCard
               label={`Pérdida ${suffix}`}
               value={formatCurrency(data.won)}
               icon={TrendingDown}
               tone="rose"
               hint="Premios ganados en el rango"
               delta={pctDelta(data.won, data.wonPrev, 'down')}
+              breakdown={data.byGame}
+              breakdownKey="won"
             />
             <KpiCard
               label={`Utilidad ${suffix}`}
