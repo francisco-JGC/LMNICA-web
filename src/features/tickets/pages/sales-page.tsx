@@ -13,12 +13,13 @@ import {
 
 import { useGames, useGameSchedules } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
+import { listTickets } from '@/features/tickets/api/tickets.api';
 import { TicketDetailsModal } from '@/features/tickets/components/ticket-details-modal';
-import { useTickets } from '@/features/tickets/hooks/use-tickets';
+import { useTicket, useTickets } from '@/features/tickets/hooks/use-tickets';
 import { useUsers } from '@/features/users/hooks/use-users';
 import { cn } from '@/shared/lib/cn';
 import { downloadXlsx, fmtDateTime } from '@/shared/lib/export-xlsx';
-import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { endOfDayParam, formatCurrency, formatDrawTimeLabel } from '@/shared/lib/format';
 import {
   SegmentedControl,
   type SegmentTab,
@@ -74,14 +75,6 @@ function formatManaguaTime(iso: string): string {
   return TIME_FMT.format(new Date(iso));
 }
 
-/** "18:00" → "6:00 PM"; "09:30" → "9:30 AM". */
-function formatDrawTimeLabel(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  const suffix = h < 12 ? 'AM' : 'PM';
-  const twelve = h % 12 === 0 ? 12 : h % 12;
-  return `${twelve}:${String(m).padStart(2, '0')} ${suffix}`;
-}
-
 export function SalesPage() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [gameId, setGameId] = useState('');
@@ -134,6 +127,7 @@ export function SalesPage() {
   const { data: salePoints } = useSalePoints();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
+    salePointId: salePointId || undefined,
     limit: 500,
     offset: 0,
   });
@@ -164,31 +158,37 @@ export function SalesPage() {
     return m;
   }, [sellersPage]);
 
-  // Cascade: al elegir sucursal solo se muestran sus vendedores.
   const sellerOptions = useMemo(() => {
     const all = sellersPage?.items ?? [];
-    const filtered = salePointId
-      ? all.filter((u) => u.salePointId === salePointId)
-      : all;
     return [
       { value: '', label: 'Todos los vendedores' },
-      ...filtered.map((u) => ({ value: u.id, label: u.name })),
+      ...all.map((u) => ({ value: u.id, label: u.name })),
     ];
-  }, [sellersPage, salePointId]);
+  }, [sellersPage]);
 
   const handleExport = async () => {
+    const all = await listTickets({
+      status: status === 'all' ? undefined : status,
+      gameId: gameId || undefined,
+      drawTime: drawTime || undefined,
+      salePointId: salePointId || undefined,
+      sellerId: sellerId || undefined,
+      from: from ? `${from}T00:00:00-06:00` : undefined,
+      to: to ? endOfDayParam(to) : undefined,
+      search: debouncedSearch || undefined,
+    });
     downloadXlsx(`ventas-${from}-${to}`, [
       {
         name: 'Ventas',
-        headers: ['Folio', 'Fecha', 'Sucursal', 'Vendedor', 'Cliente', 'Juego', 'Líneas', 'Total', 'Estado'],
-        rows: items.map((t) => [
+        headers: ['Folio', 'Creado', 'Sucursal', 'Vendedor', 'Cliente', 'Juego', 'Sorteo', 'Total', 'Estado'],
+        rows: all.items.map((t) => [
           t.folio,
           fmtDateTime(t.createdAt),
-          salePointById.get(t.salePointId)?.name ?? '—',
-          userById.get(t.sellerId)?.name ?? '—',
+          t.salePointName ?? salePointById.get(t.salePointId)?.name ?? '',
+          t.sellerName ?? userById.get(t.sellerId)?.name ?? '',
           t.client ?? '',
-          gameById.get(t.gameId)?.name ?? '—',
-          t.count,
+          gameById.get(t.gameId)?.name ?? '',
+          fmtDateTime(t.drawAt),
           t.total,
           t.status === 'valid' ? 'Válido' : 'Anulado',
         ]),
@@ -240,10 +240,7 @@ export function SalesPage() {
   const hasPrev = page > 0;
   const hasNext = rangeEnd < filteredCount;
 
-  const selectedTicket = useMemo(
-    () => items.find((t) => t.id === selectedId) ?? null,
-    [items, selectedId],
-  );
+  const { data: selectedTicket } = useTicket(selectedId);
 
   return (
     <div className="space-y-6">
@@ -444,9 +441,9 @@ export function SalesPage() {
                     ticket={ticket}
                     gameName={gameById.get(ticket.gameId)?.name ?? '—'}
                     salePointName={
-                      salePointById.get(ticket.salePointId)?.name ?? '—'
+                      ticket.salePointName ?? salePointById.get(ticket.salePointId)?.name ?? '—'
                     }
-                    sellerName={userById.get(ticket.sellerId)?.name ?? '—'}
+                    sellerName={ticket.sellerName ?? userById.get(ticket.sellerId)?.name ?? '—'}
                     onClick={() => setSelectedId(ticket.id)}
                   />
                 ))
@@ -504,15 +501,15 @@ export function SalesPage() {
       </div>
 
       <TicketDetailsModal
-        open={selectedTicket !== null}
+        open={selectedId !== null}
         onClose={() => setSelectedId(null)}
-        ticket={selectedTicket}
+        ticket={selectedTicket ?? null}
         gameName={selectedTicket ? gameById.get(selectedTicket.gameId)?.name ?? null : null}
         salePointName={
-          selectedTicket ? salePointById.get(selectedTicket.salePointId)?.name ?? null : null
+          selectedTicket ? selectedTicket.salePointName ?? salePointById.get(selectedTicket.salePointId)?.name ?? null : null
         }
         sellerName={
-          selectedTicket ? userById.get(selectedTicket.sellerId)?.name ?? null : null
+          selectedTicket ? selectedTicket.sellerName ?? userById.get(selectedTicket.sellerId)?.name ?? null : null
         }
       />
     </div>
