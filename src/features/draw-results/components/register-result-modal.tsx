@@ -32,12 +32,28 @@ interface Props {
   existing?: DrawResult | null;
 }
 
+const MONTH_OPTIONS = [
+  { value: '1', label: 'Enero' },
+  { value: '2', label: 'Febrero' },
+  { value: '3', label: 'Marzo' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Mayo' },
+  { value: '6', label: 'Junio' },
+  { value: '7', label: 'Julio' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Septiembre' },
+  { value: '10', label: 'Octubre' },
+  { value: '11', label: 'Noviembre' },
+  { value: '12', label: 'Diciembre' },
+];
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
 function isoToday(): string {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** Parses ISO drawAt into local date+time components for pre-filling. */
@@ -63,9 +79,21 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
   const isEdit = existing != null;
 
   const [gameId, setGameId] = useState<string>('');
-  const [date, setDate] = useState<string>(isoToday());
+  const [date, setDate] = useState<string>(isoToday);
   const [time, setTime] = useState<string>('');
   const [winningNumber, setWinningNumber] = useState<string>('');
+  // Month/day selects used only when game type === 'date'.
+  const [winMonth, setWinMonth] = useState<number>(1);
+  const [winDay, setWinDay] = useState<number>(1);
+
+  const winDayOptions = useMemo(
+    () =>
+      Array.from({ length: 31 }, (_, i) => ({
+        value: String(i + 1),
+        label: String(i + 1),
+      })),
+    [],
+  );
 
   const { data: games } = useGames();
   const { data: schedules } = useGameSchedules(
@@ -99,11 +127,22 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
       setDate(d);
       setTime(t);
       setWinningNumber(existing.winningNumber);
+      // Pre-fill month/day selects for date-type games ("DD/MM" format).
+      const match = existing.winningNumber.match(/^(\d{1,2})\/(\d{1,2})$/);
+      if (match) {
+        setWinDay(Number(match[1]));
+        setWinMonth(Number(match[2]));
+      } else {
+        setWinDay(1);
+        setWinMonth(1);
+      }
     } else {
       setGameId('');
       setDate(isoToday());
       setTime('');
       setWinningNumber('');
+      setWinDay(1);
+      setWinMonth(1);
     }
   }, [open, existing]);
 
@@ -111,6 +150,12 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
     () => games?.find((g) => g.id === gameId) ?? null,
     [games, gameId],
   );
+
+  const isDateGame = selectedGame?.type === 'date';
+  // When game type is 'date', the winning number is DD/MM derived from selects.
+  const effectiveWinningNumber = isDateGame
+    ? `${pad(winDay)}/${pad(winMonth)}`
+    : winningNumber;
 
   // For CREATE mode, filter schedules by the selected date's day of week.
   const availableSchedules = useMemo(() => {
@@ -133,7 +178,7 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
   }, [existingResultsToday]);
 
   const canSubmit =
-    winningNumber.trim().length > 0 &&
+    effectiveWinningNumber.trim().length > 0 &&
     (isEdit || (gameId !== '' && date !== '' && time !== ''));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,7 +188,7 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
     if (isEdit && existing) {
       await update.mutateAsync({
         id: existing.id,
-        payload: { winningNumber: winningNumber.trim() },
+        payload: { winningNumber: effectiveWinningNumber.trim() },
       });
       onClose();
       return;
@@ -155,7 +200,7 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
     await create.mutateAsync({
       gameId,
       drawAt,
-      winningNumber: winningNumber.trim(),
+      winningNumber: effectiveWinningNumber.trim(),
     });
     onClose();
   };
@@ -310,27 +355,41 @@ export function RegisterResultModal({ open, onClose, existing }: Props) {
         <Field
           label="Número ganador"
           required
-          hint={
-            selectedGame
-              ? NUMBER_HINT[selectedGame.type]
-              : 'Depende del tipo de juego'
-          }
+          hint={selectedGame ? NUMBER_HINT[selectedGame.type] : 'Depende del tipo de juego'}
         >
-          <div className="relative">
-            <Trophy className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-amber-500" />
-            <input
-              type="text"
-              value={winningNumber}
-              onChange={(e) => setWinningNumber(e.target.value)}
-              maxLength={20}
-              autoFocus={isEdit}
-              placeholder="000"
-              className={cn(
-                inputClass,
-                'pl-9 pr-3 font-mono text-lg tracking-widest',
-              )}
-            />
-          </div>
+          {isDateGame ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={String(winMonth)}
+                onChange={(v) => setWinMonth(Number(v))}
+                ariaLabel="Mes ganador"
+                options={MONTH_OPTIONS}
+              />
+              <span className="shrink-0 font-bold text-muted-foreground">/</span>
+              <Select
+                value={String(winDay)}
+                onChange={(v) => setWinDay(Number(v))}
+                ariaLabel="Día ganador"
+                options={winDayOptions}
+              />
+            </div>
+          ) : (
+            <div className="relative">
+              <Trophy className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-amber-500" />
+              <input
+                type="text"
+                value={winningNumber}
+                onChange={(e) => setWinningNumber(e.target.value)}
+                maxLength={20}
+                autoFocus={isEdit}
+                placeholder="000"
+                className={cn(
+                  inputClass,
+                  'pl-9 pr-3 font-mono text-lg tracking-widest',
+                )}
+              />
+            </div>
+          )}
         </Field>
 
         {(create.error || update.error || del.error) && (
