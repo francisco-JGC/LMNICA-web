@@ -209,7 +209,7 @@ export function SaleLimitsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <ShieldAlert className="size-5 text-muted-foreground" />
-          <h1 className="text-2xl font-black tracking-tight">Límites de Venta</h1>
+          <h1 className="text-2xl font-black tracking-tight">Montos Máximos</h1>
         </div>
         <p className="max-w-md text-xs text-muted-foreground">
           Tope en córdobas por número por sorteo. Al alcanzarse, ese número queda
