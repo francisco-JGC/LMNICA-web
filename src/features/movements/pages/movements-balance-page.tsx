@@ -6,11 +6,13 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  Dices,
   Handshake,
   History,
   MapPin,
   Share2,
   Sigma,
+  Timer,
   TrendingDown,
   TrendingUp,
   User,
@@ -23,6 +25,7 @@ import { useMovementsBalance } from '@/features/movements/hooks/use-movements-ba
 import { useSellerMovementsBalance } from '@/features/movements/hooks/use-seller-movements-balance';
 import { MovementType } from '@/features/movements/types';
 import { useSellerReport } from '@/features/reports/hooks/use-seller-report';
+import { useGameSchedules, useGames } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { cn } from '@/shared/lib/cn';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
@@ -58,10 +61,25 @@ export function MovementsBalancePage() {
   // Multi-sucursal. `[]` significa "todas las visibles según partner scope".
   const [salePointIds, setSalePointIds] = useState<string[]>([]);
   const [sellerId, setSellerId] = useState('');
+  const [gameId, setGameId] = useState('');
+  const [drawTime, setDrawTime] = useState('');
   const [from, setFrom] = useState(isoDate(new Date()));
   const [to, setTo] = useState(isoDate(new Date()));
   const [showSalary, setShowSalary] = useState(false);
 
+  // Parámetros con filtro de juego/sorteo — van a balance y seller report.
+  const balanceParams = useMemo(
+    () => ({
+      salePointIds: salePointIds.length > 0 ? salePointIds : undefined,
+      gameId: gameId || undefined,
+      drawTime: drawTime || undefined,
+      from: from ? `${from}T00:00:00-06:00` : undefined,
+      to: to ? endOfDayParam(to) : undefined,
+    }),
+    [salePointIds, gameId, drawTime, from, to],
+  );
+
+  // Los movimientos de vendedor no son por juego — usan solo rango y scope.
   const rangeParams = useMemo(
     () => ({
       salePointIds: salePointIds.length > 0 ? salePointIds : undefined,
@@ -71,11 +89,13 @@ export function MovementsBalancePage() {
     [salePointIds, from, to],
   );
 
-  const balanceQuery = useMovementsBalance(rangeParams);
-  const sellerQuery = useSellerReport(rangeParams);
+  const balanceQuery = useMovementsBalance(balanceParams);
+  const sellerQuery = useSellerReport(balanceParams);
   const sellerBalanceQuery = useSellerMovementsBalance(rangeParams);
 
   const { data: salePoints } = useSalePoints();
+  const { data: games } = useGames(true);
+  const { data: gameSchedules } = useGameSchedules(gameId || null);
 
   const balanceRows = balanceQuery.data?.items ?? [];
   const allSellerRows = sellerQuery.data?.items ?? [];
@@ -112,6 +132,12 @@ export function MovementsBalancePage() {
           id: r.sellerId,
           name: r.sellerName,
         }))}
+        gameId={gameId}
+        onGameChange={(v) => { setGameId(v); setDrawTime(''); }}
+        games={games ?? []}
+        drawTime={drawTime}
+        onDrawTimeChange={setDrawTime}
+        drawTimes={(gameSchedules ?? []).filter((s) => s.isActive).map((s) => s.drawTime)}
         from={from}
         onFromChange={setFrom}
         to={to}
@@ -197,6 +223,12 @@ function FiltersBar({
   sellerId,
   onSellerChange,
   sellers,
+  gameId,
+  onGameChange,
+  games,
+  drawTime,
+  onDrawTimeChange,
+  drawTimes,
   from,
   onFromChange,
   to,
@@ -210,6 +242,12 @@ function FiltersBar({
   sellerId: string;
   onSellerChange: (v: string) => void;
   sellers: { id: string; name: string }[];
+  gameId: string;
+  onGameChange: (v: string) => void;
+  games: { id: string; name: string }[];
+  drawTime: string;
+  onDrawTimeChange: (v: string) => void;
+  drawTimes: string[];
   from: string;
   onFromChange: (v: string) => void;
   to: string;
@@ -250,6 +288,33 @@ function FiltersBar({
         </Field>
         <Field label="Hasta">
           <DateField value={to} min={from} onChange={onToChange} />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Juego">
+          <Select
+            value={gameId}
+            onChange={onGameChange}
+            leadingIcon={<Dices className="size-4" />}
+            placeholder="Todos"
+            options={[
+              { value: '', label: 'Todos los juegos' },
+              ...games.map((g) => ({ value: g.id, label: g.name })),
+            ]}
+          />
+        </Field>
+        <Field label="Sorteo">
+          <Select
+            value={drawTime}
+            onChange={onDrawTimeChange}
+            leadingIcon={<Timer className="size-4" />}
+            placeholder={gameId ? 'Todos los sorteos' : 'Elige un juego'}
+            disabled={!gameId}
+            options={[
+              { value: '', label: 'Todos los sorteos' },
+              ...drawTimes.map((t) => ({ value: t, label: t })),
+            ]}
+          />
         </Field>
       </div>
       <label className="flex items-center gap-2 pt-1 text-sm text-foreground">

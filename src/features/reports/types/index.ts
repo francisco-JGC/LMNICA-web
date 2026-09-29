@@ -22,6 +22,9 @@ export interface SellerReportParams {
   from?: string;
   /** ISO with Managua offset. Inclusive. */
   to?: string;
+  gameId?: string;
+  /** "HH:MM" hora Managua. */
+  drawTime?: string;
 }
 
 export interface SellerReportResponse {

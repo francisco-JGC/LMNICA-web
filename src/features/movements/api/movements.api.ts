@@ -105,6 +105,8 @@ export async function getMovementsBalance(
             : undefined,
         from: params.from || undefined,
         to: params.to || undefined,
+        gameId: params.gameId || undefined,
+        drawTime: params.drawTime || undefined,
       },
     },
   );

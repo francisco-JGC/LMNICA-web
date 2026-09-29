@@ -59,6 +59,9 @@ export interface MovementsBalanceParams {
   salePointIds?: string[];
   from?: string;
   to?: string;
+  gameId?: string;
+  /** "HH:MM" hora Managua. */
+  drawTime?: string;
 }
 
 export interface MovementsBalanceResponse {
