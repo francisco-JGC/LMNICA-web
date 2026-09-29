@@ -16,7 +16,9 @@ import { useUsers } from '@/features/users/hooks/use-users';
 import { WinnerDetailsModal } from '@/features/winners/components/winner-details-modal';
 import { useWinners } from '@/features/winners/hooks/use-winners';
 import { cn } from '@/shared/lib/cn';
+import { downloadXlsx, fmtDate } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
 
 import type { Game } from '@/features/games/types';
@@ -68,13 +70,14 @@ export function WinnersPage() {
   const winnersQuery = useWinners(params);
   const winners: WinningTicket[] = winnersQuery.data ?? [];
   const isLoading = winnersQuery.isLoading;
+  const isFetching = winnersQuery.isFetching;
   const error = winnersQuery.error;
 
   const { data: games } = useGames();
   const { data: salePoints } = useSalePoints();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
-    limit: 100,
+    limit: 500,
     offset: 0,
   });
 
@@ -93,6 +96,37 @@ export function WinnersPage() {
     for (const u of sellersPage?.items ?? []) m.set(u.id, u);
     return m;
   }, [sellersPage]);
+
+  // Cascade: al elegir sucursal solo se muestran sus vendedores.
+  const sellerOptions = useMemo(() => {
+    const all = sellersPage?.items ?? [];
+    const filtered = salePointId
+      ? all.filter((u) => u.salePointId === salePointId)
+      : all;
+    return [
+      { value: '', label: 'Todos los vendedores' },
+      ...filtered.map((u) => ({ value: u.id, label: u.name })),
+    ];
+  }, [sellersPage, salePointId]);
+
+  const handleExport = async () => {
+    downloadXlsx(`ganadores-${from}-${to}`, [
+      {
+        name: 'Ganadores',
+        headers: ['Folio', 'Fecha sorteo', 'Juego', 'Sucursal', 'Vendedor', 'Cliente', 'Premio', 'Pagado'],
+        rows: winners.map((w) => [
+          w.ticket.folio,
+          fmtDate(w.ticket.drawAt),
+          gameById.get(w.ticket.gameId)?.name ?? '—',
+          salePointById.get(w.ticket.salePointId)?.name ?? '—',
+          userById.get(w.ticket.sellerId)?.name ?? '—',
+          w.ticket.client ?? '',
+          w.totalPrize,
+          w.ticket.isPaid ? 'Sí' : 'No',
+        ]),
+      },
+    ]);
+  };
 
   // Filtro por folio/cliente vive server-side (ver `params.search`); acá
   // simplemente reenviamos la lista.
@@ -115,6 +149,7 @@ export function WinnersPage() {
           <Trophy className="size-5 text-muted-foreground" />
           <h1 className="text-2xl font-black tracking-tight">Ganadores</h1>
         </div>
+        <ExportButton disabled={winners.length === 0} onExport={handleExport} />
       </header>
 
       <div className="grid gap-4">
@@ -156,7 +191,10 @@ export function WinnersPage() {
           <Field label="Sucursal">
             <Select
               value={salePointId}
-              onChange={setSalePointId}
+              onChange={(v) => {
+                setSalePointId(v);
+                setSellerId('');
+              }}
               leadingIcon={<MapPin className="size-4" />}
               placeholder="Todas"
               options={[
@@ -174,13 +212,7 @@ export function WinnersPage() {
               onChange={setSellerId}
               leadingIcon={<UserRound className="size-4" />}
               placeholder="Todos"
-              options={[
-                { value: '', label: 'Todos los vendedores' },
-                ...(sellersPage?.items.map((u) => ({
-                  value: u.id,
-                  label: u.name,
-                })) ?? []),
-              ]}
+              options={sellerOptions}
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">
@@ -231,7 +263,7 @@ export function WinnersPage() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className={cn('grid gap-3 sm:grid-cols-2 xl:grid-cols-3 transition-opacity', isFetching && winners.length > 0 && 'opacity-50')}>
         {filtered.map((w) => (
           <WinnerCard
             key={w.ticket.id}

@@ -7,12 +7,15 @@ import {
   UserRound,
 } from 'lucide-react';
 
+import { getSalesByNumber } from '@/features/sales-by-number/api/sales-by-number.api';
 import { useGames } from '@/features/games/hooks/use-games';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { useSalesByNumber } from '@/features/sales-by-number/hooks/use-sales-by-number';
 import { useUsers } from '@/features/users/hooks/use-users';
 import { cn } from '@/shared/lib/cn';
+import { downloadXlsx } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
 import { TableLoadingOverlay } from '@/shared/ui/table-loading-overlay';
 
@@ -87,6 +90,17 @@ export function SalesByNumberPage() {
     return { totalAmount, ticketCount };
   }, [items]);
 
+  const handleExport = async () => {
+    const result = await getSalesByNumber(params);
+    downloadXlsx(`ventas-por-numero-${from}-${to}`, [
+      {
+        name: 'Ventas por Número',
+        headers: ['Número', 'Juego', 'Veces vendido', 'Monto total'],
+        rows: result.items.map((r) => [r.label, r.gameName, r.ticketCount, r.totalAmount]),
+      },
+    ]);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -96,10 +110,13 @@ export function SalesByNumberPage() {
             Ventas por Número
           </h1>
         </div>
-        <p className="max-w-md text-xs text-muted-foreground">
-          Cuántas veces se vendió cada número y monto total apostado, según
-          los filtros. Solo tickets válidos (los anulados no cuentan).
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="max-w-md text-xs text-muted-foreground">
+            Cuántas veces se vendió cada número y monto total apostado, según
+            los filtros. Solo tickets válidos (los anulados no cuentan).
+          </p>
+          <ExportButton disabled={items.length === 0} onExport={handleExport} />
+        </div>
       </header>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">

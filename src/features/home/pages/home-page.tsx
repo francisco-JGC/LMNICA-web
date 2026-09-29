@@ -21,7 +21,9 @@ import { TopRankingCard } from '@/features/home/components/top-ranking-card';
 import { useDashboardSummary } from '@/features/home/hooks/use-dashboard-summary';
 import { useSession } from '@/features/auth/hooks/use-session';
 import { cn } from '@/shared/lib/cn';
+import { downloadXlsx } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { ExportButton } from '@/shared/ui/export-button';
 
 function isoDate(d: Date): string {
   const y = d.getFullYear();
@@ -58,6 +60,39 @@ export function HomePage() {
 
   const { data, isLoading, error } = useDashboardSummary(params);
 
+  const handleExport = async () => {
+    if (!data) return;
+    downloadXlsx(`dashboard-${from}-${to}`, [
+      {
+        name: 'Resumen',
+        headers: ['Métrica', 'Valor'],
+        rows: [
+          ['Facturado', data.billed],
+          ['Pérdida (premios)', data.won],
+          ['Utilidad', data.profit],
+          ['Boletos', data.tickets],
+          ['Ticket promedio', data.averageTicket],
+          ['Venta semanal', data.weeklyBilled],
+        ],
+      },
+      {
+        name: 'Por Juego',
+        headers: ['Juego', 'Facturado', 'Pérdida'],
+        rows: data.byGame.map((g) => [g.gameName, g.billed, g.won]),
+      },
+      {
+        name: 'Top Vendedores',
+        headers: ['Vendedor', 'Boletos', 'Facturado'],
+        rows: data.topSellers.map((s) => [s.name, s.ticketCount, s.amount]),
+      },
+      {
+        name: 'Top Sucursales',
+        headers: ['Sucursal', 'Boletos', 'Facturado'],
+        rows: data.topSalePoints.map((s) => [s.name, s.ticketCount, s.amount]),
+      },
+    ]);
+  };
+
   // Etiquetas y hints: si el rango es "hoy", mostramos "hoy"; si es
   // un rango custom, mostramos el rango. Sub-hint de deltas también
   // se adapta ("vs ayer" vs "vs período previo").
@@ -72,7 +107,10 @@ export function HomePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader name={session?.user.name ?? ''} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader name={session?.user.name ?? ''} />
+        {data && <ExportButton onExport={handleExport} />}
+      </div>
 
       <RangeFilter
         from={from}

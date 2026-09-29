@@ -13,11 +13,14 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { getBranchFlow } from '@/features/movements/api/movements.api';
 import { useBranchFlow } from '@/features/movements/hooks/use-branch-flow';
 import { MovementType } from '@/features/movements/types';
 import { useSalePoints } from '@/features/sale-points/hooks/use-sale-points';
 import { cn } from '@/shared/lib/cn';
+import { downloadXlsx, fmtDateTime } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
+import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
 import { TableLoadingOverlay } from '@/shared/ui/table-loading-overlay';
 
@@ -177,6 +180,34 @@ export function BranchFlowPage() {
   const items = data?.items ?? [];
 
   const { data: salePoints } = useSalePoints();
+  const salePointName = useMemo(
+    () => salePoints?.find((sp) => sp.id === salePointId)?.name ?? salePointId,
+    [salePoints, salePointId],
+  );
+
+  const handleExport = async () => {
+    if (!salePointId || !params) return;
+    const result = await getBranchFlow(params);
+    let balance = 0;
+    downloadXlsx(`flujo-${salePointName}-${from}-${to}`, [
+      {
+        name: 'Flujo',
+        headers: ['Fecha/hora', 'Evento', 'Descripción', 'Monto', 'Balance'],
+        rows: result.items.map((item) => {
+          const meta = metaFor(item);
+          const signed = signedAmount(item);
+          balance += signed;
+          return [
+            fmtDateTime(item.at),
+            meta.label,
+            item.description ?? '',
+            item.amount,
+            balance,
+          ];
+        }),
+      },
+    ]);
+  };
 
   // Compute running balance + group by Managua day. Balance resets at the
   // start of the query range (we don't have "opening balance from before").
@@ -226,9 +257,12 @@ export function BranchFlowPage() {
             Flujo de Sucursal
           </h1>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Cronología de eventos con balance corriente
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            Cronología de eventos con balance corriente
+          </p>
+          {salePointId && <ExportButton disabled={items.length === 0} onExport={handleExport} />}
+        </div>
       </header>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">

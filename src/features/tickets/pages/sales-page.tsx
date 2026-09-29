@@ -17,11 +17,13 @@ import { TicketDetailsModal } from '@/features/tickets/components/ticket-details
 import { useTickets } from '@/features/tickets/hooks/use-tickets';
 import { useUsers } from '@/features/users/hooks/use-users';
 import { cn } from '@/shared/lib/cn';
+import { downloadXlsx, fmtDateTime } from '@/shared/lib/export-xlsx';
 import { endOfDayParam, formatCurrency } from '@/shared/lib/format';
 import {
   SegmentedControl,
   type SegmentTab,
 } from '@/shared/ui/segmented-control';
+import { ExportButton } from '@/shared/ui/export-button';
 import { Select } from '@/shared/ui/select';
 import { TableLoadingOverlay } from '@/shared/ui/table-loading-overlay';
 
@@ -132,7 +134,7 @@ export function SalesPage() {
   const { data: salePoints } = useSalePoints();
   const { data: sellersPage } = useUsers({
     role: UserRole.SELLER,
-    limit: 100,
+    limit: 500,
     offset: 0,
   });
   // Schedules for the selected game populate the "Sorteo" dropdown.
@@ -161,6 +163,38 @@ export function SalesPage() {
     for (const u of sellersPage?.items ?? []) m.set(u.id, u);
     return m;
   }, [sellersPage]);
+
+  // Cascade: al elegir sucursal solo se muestran sus vendedores.
+  const sellerOptions = useMemo(() => {
+    const all = sellersPage?.items ?? [];
+    const filtered = salePointId
+      ? all.filter((u) => u.salePointId === salePointId)
+      : all;
+    return [
+      { value: '', label: 'Todos los vendedores' },
+      ...filtered.map((u) => ({ value: u.id, label: u.name })),
+    ];
+  }, [sellersPage, salePointId]);
+
+  const handleExport = async () => {
+    downloadXlsx(`ventas-${from}-${to}`, [
+      {
+        name: 'Ventas',
+        headers: ['Folio', 'Fecha', 'Sucursal', 'Vendedor', 'Cliente', 'Juego', 'Líneas', 'Total', 'Estado'],
+        rows: items.map((t) => [
+          t.folio,
+          fmtDateTime(t.createdAt),
+          salePointById.get(t.salePointId)?.name ?? '—',
+          userById.get(t.sellerId)?.name ?? '—',
+          t.client ?? '',
+          gameById.get(t.gameId)?.name ?? '—',
+          t.count,
+          t.total,
+          t.status === 'valid' ? 'Válido' : 'Anulado',
+        ]),
+      },
+    ]);
+  };
 
   // Unique schedule times, sorted ascending. A game can have multiple
   // schedules with the same time (different weekdays) — dedupe them so the
@@ -218,8 +252,8 @@ export function SalesPage() {
           <Receipt className="size-5 text-muted-foreground" />
           <h1 className="text-2xl font-black tracking-tight">Ventas</h1>
         </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{stats.total}</span>{' '}
             tickets · <span className="font-semibold text-emerald-700">{formatCurrency(stats.billed)}</span> facturado
             {' · '}
@@ -228,6 +262,7 @@ export function SalesPage() {
               <> · <span className="font-semibold text-rose-700">{stats.voided}</span> anulados</>
             )}
           </span>
+          <ExportButton disabled={total === 0} onExport={handleExport} />
         </div>
       </header>
 
@@ -300,6 +335,7 @@ export function SalesPage() {
               value={salePointId}
               onChange={(v) => {
                 setSalePointId(v);
+                setSellerId('');
                 setPage(0);
               }}
               leadingIcon={<MapPin className="size-4" />}
@@ -322,13 +358,7 @@ export function SalesPage() {
               }}
               leadingIcon={<UserRound className="size-4" />}
               placeholder="Todos"
-              options={[
-                { value: '', label: 'Todos los vendedores' },
-                ...(sellersPage?.items.map((u) => ({
-                  value: u.id,
-                  label: u.name,
-                })) ?? []),
-              ]}
+              options={sellerOptions}
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">
