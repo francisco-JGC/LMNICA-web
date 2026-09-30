@@ -54,7 +54,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   { to: APP_ROUTES.movements, label: 'Movimientos', icon: Repeat },
   {
     to: APP_ROUTES.saleLimits,
-    label: 'Límites de Venta',
+    label: 'Montos Máximos',
     icon: ShieldAlert,
     roles: ADMIN_ONLY,
   },
